@@ -144,7 +144,7 @@ def suggestions(db: Session, user: User) -> list[str]:
         return ["How do I get started?", "What will the AI insights show me?"]
     if user.role == Role.OWNER:
         out = ["What should I restock this month and how much money do I need?", "Which designs are not selling?",
-               "How are sales this month compared to last month?", "Which category earns the most?"]
+               "What was my net profit this month, by category?", "Which designs made the most profit today?"]
     else:
         out = ["Which designs are running low?", "Show today's sales", "Are there any unusual entries I should check?",
                "Summarise stock by category"]

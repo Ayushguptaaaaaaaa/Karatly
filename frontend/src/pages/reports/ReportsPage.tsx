@@ -1,12 +1,12 @@
-import { ActionIcon, Box, Button, Grid, Group, Paper, SegmentedControl, Skeleton, Table, Tabs, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Box, Button, Grid, Group, Paper, SegmentedControl, Select, SimpleGrid, Skeleton, Table, Tabs, Text, Tooltip } from "@mantine/core";
 import { AreaChart, BarChart, DonutChart } from "@mantine/charts";
 import { useDisclosure } from "@mantine/hooks";
 import { IconChartBar, IconDownload, IconPrinter, IconTable, IconZzz } from "@tabler/icons-react";
 import { useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { download } from "../../api/client";
-import { useDashboard, usePeriodOptions, usePeriodParams, useReport } from "../../api/hooks";
-import type { PeriodType, StockStatus } from "../../api/types";
+import { useCategories, useDashboard, usePeriodOptions, usePeriodParams, useReport } from "../../api/hooks";
+import type { PeriodType, Profitability, ProfitRow, StockStatus } from "../../api/types";
 import { PeriodPicker } from "../../components/PeriodPicker";
 import { EmptyBox, LabelCode, Money, PageHeader, SectionCard } from "../../components/ui";
 import { CATEGORY_COLORS, STATUS_META } from "../../lib/constants";
@@ -104,6 +104,151 @@ function SalesTab() {
   );
 }
 
+function ProfitCell({ v }: { v: number }) {
+  return <Text size="sm" fw={700} className="num" c={v < 0 ? "red.7" : v > 0 ? "teal.8" : "dimmed"}>{formatINR(v)}</Text>;
+}
+
+function MarginBadge({ m }: { m: number | null }) {
+  if (m === null || m === undefined) return <Text size="sm" c="dimmed">—</Text>;
+  return <Badge variant="light" color={m < 0 ? "red" : m < 10 ? "orange" : "teal"}>{m.toFixed(1)}%</Badge>;
+}
+
+function ProfitTab() {
+  const p = usePeriodParams();
+  const { data: cats } = useCategories();
+  const [group, setGroup] = useState<"category" | "subcategory" | "design">("category");
+  const [cat, setCat] = useState<string | null>(null);
+  const q = useReport<Profitability>("profitability", { ...p, group_by: group, category_id: cat ?? undefined });
+  const t = q.data?.totals;
+  const rows = q.data?.rows ?? [];
+  const chart = rows.slice(0, 12).map((r) => ({
+    name: group === "design" ? (r.label ?? r.name) : r.name, "Net revenue": r.net_revenue, "Net profit": r.net_profit,
+  }));
+  const groupWord = group === "design" ? "designs" : group === "subcategory" ? "subcategories" : "categories";
+  const lead = (r: ProfitRow) =>
+    group === "design" ? (
+      <Box>
+        <LabelCode>{r.label}</LabelCode>
+        <Text size="xs" c="dimmed" truncate maw={180}>{r.design_name ?? r.category}</Text>
+      </Box>
+    ) : group === "subcategory" ? (
+      <Box>
+        <Text size="sm" fw={600}>{r.name}</Text>
+        <Text size="xs" c="dimmed">{r.category}</Text>
+      </Box>
+    ) : (
+      <Text size="sm" fw={600}>{r.name}</Text>
+    );
+  const kpis = [
+    { l: "Gross sales", v: t?.gross_sales, strong: false, profit: false },
+    { l: "Customer returns", v: t ? -t.returns_value || 0 : undefined, strong: false, profit: false },
+    { l: "Net revenue", v: t?.net_revenue, strong: true, profit: false },
+    { l: "Cost of goods sold", v: t ? -t.cogs || 0 : undefined, strong: false, profit: false },
+    { l: "Net profit", v: t?.net_profit, strong: true, profit: true },
+  ];
+  return (
+    <Box>
+      <Group mb="md" gap="sm" wrap="wrap" justify="space-between">
+        <Group gap="sm">
+          <SegmentedControl
+            value={group}
+            onChange={(v) => setGroup(v as typeof group)}
+            data={[
+              { value: "category", label: "By category" },
+              { value: "subcategory", label: "By subcategory" },
+              { value: "design", label: "By design" },
+            ]}
+          />
+          <Select data={(cats ?? []).map((c) => ({ value: String(c.id), label: c.name }))} value={cat} onChange={setCat}
+            placeholder="All categories" clearable w={180} />
+        </Group>
+        <Button variant="default" leftSection={<IconDownload size={16} />}
+          onClick={() => download("/reports/export", { report: "profitability", group_by: group, ...p, category_id: cat ?? undefined })}>
+          Export Excel
+        </Button>
+      </Group>
+      <SimpleGrid cols={{ base: 2, md: 5 }} mb="xs">
+        {kpis.map((k) => (
+          <Paper key={k.l} p="md" radius="md" className={k.strong ? "gold-border" : "soft-card"}>
+            <Text size="xs" c="dimmed">{k.l}</Text>
+            <Text className="serif" fw={700} fz={24} c={k.profit && (k.v ?? 0) < 0 ? "red.7" : k.profit ? "teal.8" : undefined}>
+              {k.v === undefined ? "—" : inrC(k.v)}
+            </Text>
+            {k.profit && t && (
+              <Text size="xs" c="dimmed">Margin {t.margin_pct === null ? "—" : `${t.margin_pct}%`} · {t.net_units} net pieces</Text>
+            )}
+          </Paper>
+        ))}
+      </SimpleGrid>
+      <Text size="xs" c="dimmed" mb="md">
+        {q.data?.period.label} · Net revenue = sales − customer returns · Net profit = net revenue − (net pieces × average purchase cost)
+      </Text>
+      <Grid gap="md">
+        <Grid.Col span={12}>
+          <ChartCard title={`Net revenue vs net profit · top ${Math.min(12, rows.length)} ${groupWord}`}>
+            {q.isLoading ? (
+              <Skeleton h={280} />
+            ) : rows.every((r) => r.net_revenue === 0) ? (
+              <Text size="sm" c="dimmed">No sales in this period.</Text>
+            ) : (
+              <BarChart h={300} data={chart} dataKey="name" withLegend
+                series={[{ name: "Net revenue", color: "gold.6" }, { name: "Net profit", color: "teal.6" }]}
+                valueFormatter={inrC} yAxisProps={{ width: 70 }} barProps={{ radius: 4 }} />
+            )}
+          </ChartCard>
+        </Grid.Col>
+        <Grid.Col span={12}>
+          <SectionCard title={`Profit by ${group}`} actions={<Text size="xs" c="dimmed">{q.data?.total_rows ?? 0} rows</Text>}>
+            <Box style={{ overflowX: "auto" }}>
+              <Table fz="sm" striped highlightOnHover miw={900}>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>{group === "design" ? "Design" : group === "subcategory" ? "Subcategory" : "Category"}</Table.Th>
+                    <Table.Th ta="right">Sold</Table.Th>
+                    <Table.Th ta="right">Returned</Table.Th>
+                    <Table.Th ta="right">Gross sales</Table.Th>
+                    <Table.Th ta="right">Net revenue</Table.Th>
+                    <Table.Th ta="right">Cost of goods</Table.Th>
+                    <Table.Th ta="right">Net profit</Table.Th>
+                    <Table.Th ta="right">Margin</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {rows.map((r) => (
+                    <Table.Tr key={r.key}>
+                      <Table.Td>{lead(r)}</Table.Td>
+                      <Table.Td ta="right" className="num">{r.units_sold}</Table.Td>
+                      <Table.Td ta="right" className="num">{r.units_returned || "—"}</Table.Td>
+                      <Table.Td ta="right" className="num">{formatINR(r.gross_sales)}</Table.Td>
+                      <Table.Td ta="right" className="num" fw={600}>{formatINR(r.net_revenue)}</Table.Td>
+                      <Table.Td ta="right" className="num">{formatINR(r.cogs)}</Table.Td>
+                      <Table.Td ta="right"><ProfitCell v={r.net_profit} /></Table.Td>
+                      <Table.Td ta="right"><MarginBadge m={r.margin_pct} /></Table.Td>
+                    </Table.Tr>
+                  ))}
+                  {t && rows.length > 0 && (
+                    <Table.Tr style={{ fontWeight: 700 }}>
+                      <Table.Td>Total</Table.Td>
+                      <Table.Td ta="right" className="num">{t.units_sold}</Table.Td>
+                      <Table.Td ta="right" className="num">{t.units_returned}</Table.Td>
+                      <Table.Td ta="right" className="num">{formatINR(t.gross_sales)}</Table.Td>
+                      <Table.Td ta="right" className="num">{formatINR(t.net_revenue)}</Table.Td>
+                      <Table.Td ta="right" className="num">{formatINR(t.cogs)}</Table.Td>
+                      <Table.Td ta="right"><ProfitCell v={t.net_profit} /></Table.Td>
+                      <Table.Td ta="right"><MarginBadge m={t.margin_pct} /></Table.Td>
+                    </Table.Tr>
+                  )}
+                </Table.Tbody>
+              </Table>
+            </Box>
+            {group === "design" && rows.length === 0 && <Text size="sm" c="dimmed" mt="sm">No design was sold in this period.</Text>}
+          </SectionCard>
+        </Grid.Col>
+      </Grid>
+    </Box>
+  );
+}
+
 function StockTab() {
   const p = usePeriodParams();
   const { data: dash } = useDashboard();
@@ -154,7 +299,7 @@ function DeadTab() {
 function CompareTab() {
   const { data: opts } = usePeriodOptions();
   const [type, setType] = useState<PeriodType>("month");
-  const list = (type === "quarter" ? opts?.quarters : opts?.months) ?? [];
+  const list = (type === "quarter" ? opts?.quarters : type === "day" ? opts?.days : opts?.months) ?? [];
   const [a, setA] = useState<string | null>(null);
   const [b, setB] = useState<string | null>(null);
   const [metric, setMetric] = useState<"value" | "units">("value");
@@ -187,17 +332,19 @@ export default function ReportsPage() {
     <>
       <PageHeader
         title="Reports"
-        subtitle="Charts for sales, stock and slow-moving designs. Export any of them to Excel."
+        subtitle="Sales, profit, stock and slow-moving designs for any day, month or quarter. Export any of them to Excel."
         actions={<>{tab !== "compare" && tab !== "dead" && <PeriodPicker compact />}<Button variant="default" leftSection={<IconPrinter size={16} />} onClick={() => window.print()}>Print</Button></>}
       />
       <Tabs value={tab} onChange={(v) => setParams({ tab: v ?? "sales" })} keepMounted={false}>
         <Tabs.List mb="lg">
           <Tabs.Tab value="sales">Sales</Tabs.Tab>
+          <Tabs.Tab value="profit">Profit</Tabs.Tab>
           <Tabs.Tab value="stock">Stock</Tabs.Tab>
           <Tabs.Tab value="dead">Dead stock</Tabs.Tab>
           <Tabs.Tab value="compare">Compare periods</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="sales"><SalesTab /></Tabs.Panel>
+        <Tabs.Panel value="profit"><ProfitTab /></Tabs.Panel>
         <Tabs.Panel value="stock"><StockTab /></Tabs.Panel>
         <Tabs.Panel value="dead"><DeadTab /></Tabs.Panel>
         <Tabs.Panel value="compare"><CompareTab /></Tabs.Panel>

@@ -8,7 +8,7 @@ export type MovementType =
 export type Priority = "HIGH" | "MEDIUM" | "LOW";
 export type Decision = "PENDING" | "APPROVED" | "REJECTED";
 export type PlanStatus = "DRAFT" | "SUBMITTED" | "DECIDED" | "RECEIVED";
-export type PeriodType = "month" | "quarter" | "custom";
+export type PeriodType = "day" | "month" | "quarter" | "custom";
 
 export interface User { id: number; username: string; display_name: string; role: Role }
 export interface LoginResponse { access_token: string; token_type: string; expires_at: string; user: User }
@@ -19,12 +19,14 @@ export interface SubRef { id: number; name: string }
 export interface Subcategory {
   id: number; category_id: number; name: string; description: string | null; is_active: boolean; sort_order: number;
   design_count?: number | null; total_pieces?: number | null;
+  net_revenue_30d?: number | null; net_profit_30d?: number | null; margin_pct_30d?: number | null;
 }
 export interface CategoryCard {
   id: number; name: string; label_prefix: string; icon: string; description: string | null; is_active: boolean;
   sort_order: number; inflation_pct_override: number | null; subcategory_count: number; subcategories: SubRef[];
   design_count: number; total_pieces: number; stock_value_cost: number; in_stock_count: number;
   out_of_stock_count: number; low_stock_count: number; dead_stock_count: number; sold_last_30d: number;
+  net_revenue_30d: number; net_profit_30d: number; margin_pct_30d: number | null;
 }
 export interface CategoryDetail extends Omit<CategoryCard, "subcategories"> { subcategories: Subcategory[] }
 
@@ -39,6 +41,7 @@ export interface DesignDetail extends DesignListItem {
   description: string | null; supplier: string | null; inflation_pct_override: number | null;
   custom_fields: Record<string, unknown>; velocity_30d: number; days_since_last_sale: number | null;
   first_movement_on: string | null; last_sale_on: string | null; created_at: string | null;
+  avg_unit_cost: number | null; net_revenue_30d: number; net_profit_30d: number; margin_pct_30d: number | null;
 }
 export interface DesignSearchHit {
   id: number; label: string; name: string | null; category_name: string; current_stock: number; status: StockStatus;
@@ -69,10 +72,11 @@ export interface PeriodRow {
   design: { id: number; label: string; name: string | null; category_name: string; subcategory_name: string | null; photo_url: string | null };
   opening: number; opening_added: number; received: number; sold: number; customer_returns: number;
   supplier_returns: number; adjustments_net: number; closing: number; sales_value: number; status_now: StockStatus;
+  net_revenue: number; net_profit: number; margin_pct: number | null;
 }
 export interface PeriodStock {
   period: PeriodInfo; rows: Page<PeriodRow>;
-  totals: Record<"opening" | "opening_added" | "received" | "sold" | "customer_returns" | "supplier_returns" | "adjustments_net" | "closing" | "sales_value", number>;
+  totals: Record<"opening" | "opening_added" | "received" | "sold" | "customer_returns" | "supplier_returns" | "adjustments_net" | "closing" | "sales_value" | "net_revenue" | "net_profit", number> & { margin_pct: number | null };
 }
 
 export interface InstantInsight {
@@ -89,16 +93,17 @@ export interface Kpis {
   total_designs: number; total_pieces: number; stock_value_cost: number; stock_value_selling: number;
   sales_units: number; sales_value: number; sales_change_pct: number | null; out_of_stock: number; low_stock: number;
   dead_stock: number; dead_stock_value: number; needs_attention: number;
+  net_revenue: number; net_profit: number; cogs: number; profit_margin_pct: number | null; net_profit_change_pct: number | null;
 }
 export interface TrendPoint { month: string; label: string; units: number; value: number }
 export interface Dashboard {
   period: PeriodInfo; data_version: number;
   setup: { has_category: boolean; has_designs: boolean; has_opening_stock: boolean; has_sale: boolean; has_insights: boolean; completed_steps: number; total_steps: number };
   kpis: Kpis;
-  kpi_sparklines: { sales_value: number[]; sales_units: number[]; stock_value_cost: number[] };
+  kpi_sparklines: { sales_value: number[]; sales_units: number[]; stock_value_cost: number[]; net_profit: number[] };
   stock_health: Record<StockStatus, number>;
   sales_trend: TrendPoint[];
-  category_breakdown: { category_id: number; name: string; icon: string; pieces: number; stock_value_cost: number; sold_units: number; sales_value: number; share_pct: number; design_count: number }[];
+  category_breakdown: { category_id: number; name: string; icon: string; pieces: number; stock_value_cost: number; sold_units: number; sales_value: number; share_pct: number; design_count: number; net_revenue: number; net_profit: number }[];
   top_sellers: { design_id: number; label: string; name: string | null; photo_url: string | null; category_name: string; sold_units: number; sales_value: number; current_stock: number }[];
   alerts: AlertItem[];
   instant_insights: InstantInsight[];
@@ -183,4 +188,17 @@ export interface AiStatus {
   mock_mode: boolean; primary_model: string; fallback_model: string; primary_available: boolean;
   primary_cooldown_until: string | null; fallback_available: boolean; fallback_cooldown_until: string | null;
   last_error: string | null; runs_today: number; chat_answers_today: number; busy: boolean;
+}
+
+export interface ProfitRow {
+  key: string; name: string; designs: number;
+  label?: string; design_name?: string | null; design_id?: number; category?: string; subcategory?: string | null;
+  category_id?: number; subcategory_id?: number | null; icon?: string; photo_url?: string | null; current_stock?: number;
+  avg_unit_cost?: number;
+  units_sold: number; units_returned: number; net_units: number; gross_sales: number; returns_value: number;
+  net_revenue: number; cogs: number; net_profit: number; margin_pct: number | null;
+}
+export interface Profitability {
+  period: PeriodInfo; group_by: "category" | "subcategory" | "design"; rows: ProfitRow[]; total_rows: number;
+  totals: Omit<ProfitRow, "key" | "name" | "designs">;
 }

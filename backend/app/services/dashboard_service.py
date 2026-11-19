@@ -92,6 +92,18 @@ def overview(db: Session, p: period_service.Period) -> dict:
         "dead_stock_value": money(sum((st.stock_value_cost for st in dead), Decimal("0"))),
         "needs_attention": health["OUT"] + health["LOW"],
     }
+    from app.services import profit_service
+
+    full_profit = profit_service.totals_for(db, p.start, p.effective_end)
+    cur_profit = profit_service.totals_for(db, cs, ce)["net_profit"]
+    prev_profit = profit_service.totals_for(db, ps, pe)["net_profit"]
+    kpis.update({
+        "net_revenue": full_profit["net_revenue"],
+        "net_profit": full_profit["net_profit"],
+        "cogs": full_profit["cogs"],
+        "profit_margin_pct": full_profit["margin_pct"],
+        "net_profit_change_pct": _pct(cur_profit, prev_profit) if cur_profit and prev_profit else None,
+    })
 
     starts6, monthly = metrics_service.monthly_sales(db, 6)
     trend = metrics_service.series_points(starts6, monthly.get("total", {}))
@@ -99,8 +111,11 @@ def overview(db: Session, p: period_service.Period) -> dict:
         "sales_value": [pt["value"] for pt in trend],
         "sales_units": [pt["units"] for pt in trend],
         "stock_value_cost": stock_value_series(db, snap, starts6) if active else [0.0] * 6,
+        "net_profit": [profit_service.totals_for(db, st, period_service.resolve(db, "month", st).effective_end)["net_profit"]
+                       if st <= t else 0.0 for st in starts6],
     }
 
+    cat_profit = profit_service.design_profit(db, p.start, p.effective_end)
     cats = {c.id: c for c in db.query(Category).filter(Category.is_active.is_(True)).order_by(Category.sort_order)}
     breakdown = []
     total_sales_val = float(sales_value) or 0
@@ -115,6 +130,8 @@ def overview(db: Session, p: period_service.Period) -> dict:
             "sold_units": sold, "sales_value": round(sval, 2),
             "share_pct": round(sval / total_sales_val * 100, 1) if total_sales_val else 0.0,
             "design_count": len(mine),
+            "net_revenue": round(sum(float(cat_profit[d.id]["net_revenue"]) for d in mine if d.id in cat_profit), 2),
+            "net_profit": round(sum(float(cat_profit[d.id]["net_profit"]) for d in mine if d.id in cat_profit), 2),
         })
 
     top = sorted(((did, q, v) for did, (q, v) in full_sales.items() if did in snap.designs),
@@ -247,7 +264,7 @@ def instant_insights(db: Session, ctx: dict) -> list[dict]:
             up = pct > 0
             items.append({"id": "sales_change", "severity": "success" if up else "warning",
                           "icon": "trending-up" if up else "trending-down",
-                          "title": f"Sales {'up' if up else 'down'} {abs(pct):.0f}% vs last {ctx['p'].period_type if ctx['p'].period_type != 'custom' else 'period'}",
+                          "title": f"Sales {'up' if up else 'down'} {abs(pct):.0f}% vs { {'day': 'yesterday', 'month': 'last month', 'quarter': 'last quarter'}.get(ctx['p'].period_type, 'last period') }",
                           "detail": f"{costing_service.format_inr_compact(ctx['cur_v'])} so far vs {costing_service.format_inr_compact(ctx['prev_v'])} in the same days before",
                           "action": {"label": "Reports", "route": "/app/reports?tab=sales"}})
     week = metrics_service.sales_by_design(db, _today() - timedelta(days=6), _today())

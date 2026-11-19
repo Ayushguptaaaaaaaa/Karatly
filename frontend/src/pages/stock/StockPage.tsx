@@ -191,6 +191,8 @@ function PeriodTab() {
     { l: "Opening", v: t ? t.opening + t.opening_added : 0 }, { l: "Received", v: t?.received ?? 0, c: "teal.7" },
     { l: "Sold", v: t?.sold ?? 0, c: "red.7" }, { l: "Returns", v: (t?.customer_returns ?? 0) - (t?.supplier_returns ?? 0) },
     { l: "Corrections", v: t?.adjustments_net ?? 0 }, { l: "Closing", v: t?.closing ?? 0, bold: true },
+    { l: "Net revenue", v: t?.net_revenue ?? 0, money: true },
+    { l: "Net profit", v: t?.net_profit ?? 0, money: true, bold: true, c: (t?.net_profit ?? 0) < 0 ? "red.7" : "teal.8" },
   ];
   return (
     <Stack>
@@ -211,11 +213,11 @@ function PeriodTab() {
           {data.period.is_current ? " (so far)" : ""} · Sales <b>{formatINR(t?.sales_value ?? 0)}</b>
         </Text>
       )}
-      <SimpleGrid cols={{ base: 3, sm: 6 }}>
+      <SimpleGrid cols={{ base: 2, sm: 4, lg: 8 }}>
         {sum.map((s) => (
-          <Paper key={s.l} p="sm" radius="md" className="soft-card">
+          <Paper key={s.l} p="sm" radius="md" className={s.money ? "gold-border" : "soft-card"}>
             <Text size="xs" c="dimmed">{s.l}</Text>
-            <Text fw={s.bold ? 800 : 700} fz={s.bold ? "xl" : "lg"} c={s.c} className="num">{formatNumber(s.v)}</Text>
+            <Text fw={s.bold ? 800 : 700} fz={s.bold ? "xl" : "lg"} c={s.c} className="num">{s.money ? formatINR(s.v, { compact: true }) : formatNumber(s.v)}</Text>
           </Paper>
         ))}
       </SimpleGrid>
@@ -249,6 +251,15 @@ function PeriodTab() {
             { accessor: "supplier_returns", title: "To supplier", textAlign: "right", render: (r) => <N v={r.supplier_returns} /> },
             { accessor: "adjustments_net", title: "Corrections", textAlign: "right", render: (r) => <N v={r.adjustments_net} /> },
             { accessor: "closing", title: "Closing", textAlign: "right", render: (r) => <Text fw={800} className="num">{r.closing}</Text> },
+            { accessor: "net_revenue", title: "Net revenue", textAlign: "right", render: (r) => <Text size="sm" className="num" c={r.net_revenue ? undefined : "dimmed"}>{r.net_revenue ? formatINR(r.net_revenue, { compact: true }) : "—"}</Text> },
+            {
+              accessor: "net_profit", title: "Net profit", textAlign: "right",
+              render: (r) => (r.net_revenue || r.net_profit ? (
+                <Tooltip label={r.margin_pct === null ? "" : `Margin ${r.margin_pct}%`} disabled={r.margin_pct === null}>
+                  <Text size="sm" fw={700} className="num" c={r.net_profit < 0 ? "red.7" : "teal.8"}>{formatINR(r.net_profit, { compact: true })}</Text>
+                </Tooltip>
+              ) : <Text size="sm" c="dimmed">—</Text>),
+            },
             { accessor: "status_now", title: "Status now", render: (r) => <StatusBadge status={r.status_now} size="xs" /> },
           ]}
           noRecordsText="No designs"
@@ -267,12 +278,12 @@ export default function StockPage() {
   const tab = params.get("tab") ?? "quick";
   return (
     <>
-      <PageHeader title="Stock" subtitle="Record sales and new stock, see history, and check any month or quarter." />
+      <PageHeader title="Stock" subtitle="Record sales and new stock, see history, and check stock, revenue and profit for any day, month or quarter." />
       <Tabs value={tab} onChange={(v) => setParams({ tab: v ?? "quick" })} keepMounted={false}>
         <Tabs.List mb="lg">
           <Tabs.Tab value="quick" leftSection={<IconPlusMinus size={16} />}>Quick entry</Tabs.Tab>
           <Tabs.Tab value="history" leftSection={<IconHistory size={16} />}>History</Tabs.Tab>
-          <Tabs.Tab value="period" leftSection={<IconListDetails size={16} />}>Month / Quarter view</Tabs.Tab>
+          <Tabs.Tab value="period" leftSection={<IconListDetails size={16} />}>Day / Month / Quarter view</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="quick"><QuickTab /></Tabs.Panel>
         <Tabs.Panel value="history"><HistoryTab /></Tabs.Panel>

@@ -70,6 +70,17 @@ def r_compare(period_type: str = "month", anchor_a: date | None = None, anchor_b
     return report_service.period_comparison(db, a, b, group_by)
 
 
+@router.get("/reports/profitability", tags=["reports"])
+def r_profitability(p: period_service.Period = Depends(period_dep), group_by: str = "category",
+                    category_id: int | None = None, subcategory_id: int | None = None, limit: int = 500,
+                    db: Session = Depends(get_db), _: User = CurrentUser):
+    from app.services import profit_service
+
+    if group_by not in ("category", "subcategory", "design"):
+        raise AppError("VALIDATION_ERROR", "group_by must be category, subcategory or design", 422)
+    return profit_service.profitability(db, p, group_by, category_id, subcategory_id, limit)
+
+
 @router.get("/reports/dead-stock", tags=["reports"])
 def r_dead(db: Session = Depends(get_db), _: User = CurrentUser):
     return report_service.dead_stock(db)
@@ -83,6 +94,7 @@ def r_turnover(p: period_service.Period = Depends(period_dep), db: Session = Dep
 @router.get("/reports/export", tags=["reports"])
 def r_export(report: str, p: period_service.Period = Depends(period_dep), category_id: int | None = None,
              status: str | None = None, order: str | None = None, plan_id: int | None = None,
+             group_by: str = "category",
              db: Session = Depends(get_db), _: User = CurrentUser):
     if report == "purchase_plan":
         from app.services import purchase_plan_service
@@ -91,7 +103,8 @@ def r_export(report: str, p: period_service.Period = Depends(period_dep), catego
             raise AppError("VALIDATION_ERROR", "plan_id is required", 422)
         fname, data = purchase_plan_service.export_xlsx(db, plan_id)
     else:
-        fname, data = report_service.export(db, report, p, category_id=category_id, status=status, order=order)
+        fname, data = report_service.export(db, report, p, category_id=category_id, status=status, order=order,
+                                            group_by=group_by)
     return StreamingResponse(iter([data]),
                              media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": f'attachment; filename="{fname.replace(" ", "_")}"'})

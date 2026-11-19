@@ -64,7 +64,7 @@ export function useAlerts(status?: string) {
 export function usePeriodOptions() {
   return useQuery({
     queryKey: ["periodOptions"],
-    queryFn: () => api<{ months: PeriodOption[]; quarters: PeriodOption[] }>("/periods/options"),
+    queryFn: () => api<{ days: PeriodOption[]; months: PeriodOption[]; quarters: PeriodOption[] }>("/periods/options"),
     staleTime: 10 * 60_000,
   });
 }
@@ -140,7 +140,7 @@ export function useDesign(id: number | undefined) {
 export function useDesignHistory(id: number | undefined) {
   return useQuery({
     queryKey: ["designHistory", id],
-    queryFn: () => api<{ monthly: { month: string; label: string; sold: number; received: number; sales_value: number }[]; movements: Movement[] }>(
+    queryFn: () => api<{ monthly: { month: string; label: string; sold: number; received: number; sales_value: number; net_revenue: number; net_profit: number }[]; movements: Movement[] }>(
       `/designs/${id}/history`, { query: { months: 12 } }),
     enabled: !!id,
   });

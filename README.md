@@ -39,7 +39,8 @@ A typical jeweller has many categories (necklaces, earrings, bangles…). Each c
 |---|---|
 | 🗂️ **Inventory, label by label** | Category → subcategory → design label → stock. Add 50 designs at once (labels are pre-filled, and you can paste from Excel), or import a full Excel sheet. |
 | ➕➖ **Two-tap stock changes** | Every row has `−` / `+`. Record a sale, new stock, a return or a correction, with **Undo** on every entry. |
-| 📅 **Month and quarter views** | Opening, received, sold and closing stock per label, using Indian financial-year quarters (Apr–Mar). Export to Excel. |
+| 📅 **Day, month and quarter views** | Opening, received, sold and closing stock per label for any day, month or quarter (Indian financial-year quarters, Apr–Mar). Export to Excel. |
+| 💰 **Net revenue & net profit** | For every design, subcategory and category: net revenue (sales − returns), cost of goods (average purchase cost) and net profit with margin %, for any day, month or quarter. |
 | ⚡ **Live dashboard** | KPIs, stock health, sales trend, top sellers, alerts and rule-based "today at a glance" insights. It updates instantly over Server-Sent Events. |
 | 🤖 **AI Insights report** | A CrewAI Flow of 5 crews (6 agents) writes a conclusion, recommended actions, what is and isn't selling, stock risks, entries to double-check, and seasonal trends. Every point has a **"Why?"** showing the exact numbers. |
 | 💬 **AI accountant chatbot** | Ask *"What should I restock and how much money do I need?"* The agent looks up real data with tools and answers with tables, charts and follow-up questions (English, Hindi or Hinglish). |

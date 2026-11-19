@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Box, Breadcrumbs, Button, Chip, Group, Menu, Popover, ScrollArea, SimpleGrid, Skeleton, Text, TextInput, ThemeIcon, Title } from "@mantine/core";
+import { ActionIcon, Anchor, Box, Breadcrumbs, Button, Chip, Group, Menu, Popover, ScrollArea, SimpleGrid, Skeleton, Text, TextInput, ThemeIcon, Title, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
@@ -8,7 +8,7 @@ import { Link, useParams, useSearchParams } from "react-router";
 import { errorMessage } from "../../api/client";
 import { useCategory, useCreateSubcategory, useDeleteSubcategory, useUpdateSubcategory } from "../../api/hooks";
 import { CategoryIcon, ErrorState, Money } from "../../components/ui";
-import { formatNumber } from "../../lib/format";
+import { formatINR, formatNumber } from "../../lib/format";
 import { AddCategoryModal, AddDesignsWizard, ImportExcelModal } from "./components";
 import { DesignsView } from "./DesignsView";
 
@@ -118,13 +118,16 @@ export default function CategoryDetailPage() {
             </Popover>
           </Group>
         </Group>
-        <SimpleGrid cols={{ base: 3, sm: 6 }} mt="lg">
+        <SimpleGrid cols={{ base: 2, sm: 4, lg: 8 }} mt="lg">
           <Stat label="Designs" value={formatNumber(cat.design_count)} />
           <Stat label="Pieces" value={formatNumber(cat.total_pieces)} />
           <Stat label="Stock value" value={<Money value={cat.stock_value_cost} compact />} />
           <Stat label="Sold (30 days)" value={formatNumber(cat.sold_last_30d)} />
           <Stat label="Sold out" value={cat.out_of_stock_count} color={cat.out_of_stock_count ? "red" : undefined} />
           <Stat label="Low" value={cat.low_stock_count} color={cat.low_stock_count ? "orange" : undefined} />
+          <Stat label="Net revenue (30 days)" value={<Money value={cat.net_revenue_30d} compact />} />
+          <Stat label="Net profit (30 days)" color={cat.net_profit_30d < 0 ? "red.7" : "teal.8"}
+            value={<>{<Money value={cat.net_profit_30d} compact />}{cat.margin_pct_30d !== null ? <Text span size="xs" c="dimmed"> {cat.margin_pct_30d}%</Text> : null}</>} />
         </SimpleGrid>
       </Box>
 
@@ -135,9 +138,11 @@ export default function CategoryDetailPage() {
           </Chip>
           {cat.subcategories.filter((s) => s.is_active).map((s) => (
             <Group key={s.id} gap={0} wrap="nowrap">
-              <Chip checked={sub === s.id} onChange={() => setParams({ sub: String(s.id) })} variant="filled">
-                {s.name} ({s.design_count ?? 0})
-              </Chip>
+              <Tooltip label={`Last 30 days · net revenue ${formatINR(s.net_revenue_30d ?? 0, { compact: true })} · net profit ${formatINR(s.net_profit_30d ?? 0, { compact: true })}${s.margin_pct_30d != null ? ` (${s.margin_pct_30d}%)` : ""}`}>
+                <Chip checked={sub === s.id} onChange={() => setParams({ sub: String(s.id) })} variant="filled">
+                  {s.name} ({s.design_count ?? 0})
+                </Chip>
+              </Tooltip>
               <Menu withinPortal position="bottom-end">
                 <Menu.Target>
                   <ActionIcon size="sm" variant="subtle" aria-label={`Actions for ${s.name}`}>

@@ -37,6 +37,7 @@ FRIENDLY = {
     "calculate_purchase_cost": "Calculating purchase cost…",
     "get_anomaly_candidates": "Looking for unusual entries…",
     "get_sales_trend": "Reading the sales trend…",
+    "get_profitability": "Working out revenue and profit…",
 }
 
 
@@ -147,7 +148,7 @@ class GetLabelDetails(JsonTool):
 
 
 class PeriodArgs(BaseModel):
-    period_type: str = Field(default="month", description="month or quarter")
+    period_type: str = Field(default="month", description="day, month or quarter")
     anchor: str | None = Field(default=None, description="Any date inside the period, YYYY-MM-DD. Default today.")
     category: str | None = Field(default=None, description="Optional category name")
 
@@ -169,7 +170,7 @@ class GetPeriodStock(JsonTool):
 
 
 class SalesArgs(BaseModel):
-    period_type: str = Field(default="month", description="month or quarter")
+    period_type: str = Field(default="month", description="day, month or quarter")
     anchor: str | None = Field(default=None, description="Any date in the period, YYYY-MM-DD")
     group_by: str = Field(default="category", description="category, subcategory or design")
     limit: int = Field(default=15, ge=1, le=20)
@@ -319,7 +320,33 @@ class GetSalesTrend(JsonTool):
         return {"category": category or "all", "points": res["series"][0]["points"] if res["series"] else []}
 
 
+class ProfitArgs(BaseModel):
+    period_type: str = Field(default="month", description="day, month or quarter")
+    anchor: str | None = Field(default=None, description="Any date inside the period, YYYY-MM-DD. Default today.")
+    group_by: str = Field(default="category", description="category, subcategory or design")
+    category: str | None = Field(default=None, description="Optional category name to filter")
+    limit: int = Field(default=15, ge=1, le=25)
+
+
+class GetProfitability(JsonTool):
+    name: str = "get_profitability"
+    description: str = ("Net revenue (sales minus customer returns), cost of goods, net profit and margin % for a day, "
+                        "month or quarter, grouped by category, subcategory or design. Numbers are exact.")
+    args_schema: type[BaseModel] = ProfitArgs
+
+    def fetch(self, db, period_type="month", anchor=None, group_by="category", category=None, limit=15):
+        from app.services import profit_service
+
+        gb = group_by if group_by in ("category", "subcategory", "design") else "category"
+        cid = _cat_id(db, category)
+        res = profit_service.profitability(db, _period(db, period_type, anchor), gb, cid if cid and cid > 0 else None,
+                                           limit=limit)
+        keep = ("name", "category", "units_sold", "units_returned", "net_revenue", "cogs", "net_profit", "margin_pct")
+        return {"period": res["period"]["label"], "totals": res["totals"],
+                "rows": [{k: r.get(k) for k in keep if k in r} for r in res["rows"]]}
+
+
 def all_tools() -> list[BaseTool]:
     return [GetShopOverview(), SearchDesigns(), GetLabelDetails(), GetPeriodStock(), GetSalesSummary(),
             ComparePeriods(), GetStockAlerts(), GetDemandClassification(), GetReorderBaseline(),
-            CalculatePurchaseCost(), GetAnomalyCandidates(), GetSalesTrend()]
+            CalculatePurchaseCost(), GetAnomalyCandidates(), GetSalesTrend(), GetProfitability()]

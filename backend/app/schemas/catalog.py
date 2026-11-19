@@ -47,6 +47,9 @@ class SubcategoryOut(BaseModel):
     sort_order: int
     design_count: int | None = None
     total_pieces: int | None = None
+    net_revenue_30d: Money | None = None
+    net_profit_30d: Money | None = None
+    margin_pct_30d: float | None = None
 
 
 class CategoryCard(BaseModel):
@@ -68,6 +71,9 @@ class CategoryCard(BaseModel):
     low_stock_count: int
     dead_stock_count: int
     sold_last_30d: int
+    net_revenue_30d: Money = 0
+    net_profit_30d: Money = 0
+    margin_pct_30d: float | None = None
 
 
 class CategoryDetail(CategoryCard):
@@ -131,6 +137,10 @@ class DesignDetail(DesignListItem):
     first_movement_on: date | None = None
     last_sale_on: date | None = None
     created_at: datetime | None = None
+    avg_unit_cost: Money | None = None
+    net_revenue_30d: Money = 0
+    net_profit_30d: Money = 0
+    margin_pct_30d: float | None = None
 
 
 class DesignPage(BaseModel):
@@ -301,6 +311,8 @@ class HistoryMonth(BaseModel):
     sold: int
     received: int
     sales_value: float
+    net_revenue: float = 0
+    net_profit: float = 0
 
 
 class DesignHistory(BaseModel):

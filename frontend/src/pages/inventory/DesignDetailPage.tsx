@@ -1,4 +1,5 @@
-import { Anchor, Badge, Box, Breadcrumbs, Button, Grid, Group, Image, Paper, SimpleGrid, Skeleton, Stack, Text, ThemeIcon, Timeline, Title, Tooltip } from "@mantine/core";
+import { Anchor, Badge, Box, Breadcrumbs, Button, Grid, Group, Image, Paper, SegmentedControl, SimpleGrid, Skeleton, Stack, Text, ThemeIcon, Timeline, Title, Tooltip } from "@mantine/core";
+import { useState } from "react";
 import { BarChart } from "@mantine/charts";
 import { Dropzone } from "@mantine/dropzone";
 import { useDisclosure } from "@mantine/hooks";
@@ -108,6 +109,7 @@ export default function DesignDetailPage() {
   const del = useDeleteDesign();
   const openQuick = useUi((s) => s.openQuickStock);
   const [editOpen, { open: openEdit, close: closeEdit }] = useDisclosure(false);
+  const [histMode, setHistMode] = useState<"pieces" | "money">("pieces");
 
   if (isError) return <EmptyBox title="Design not found" text="It may have been deleted." action={<Button onClick={() => navigate("/app/inventory")}>Back to inventory</Button>} />;
   if (isLoading || !d) return <Skeleton h={300} radius="md" />;
@@ -253,16 +255,38 @@ export default function DesignDetailPage() {
                 </Stack>
               </Group>
             </Paper>
-            <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }}>
-              <Fact label="Last cost" value={<Money value={d.last_unit_cost} />} />
+            <SimpleGrid cols={{ base: 2, sm: 4, lg: 8 }}>
+              <Fact label="Last cost" value={<Tooltip label={`Average purchase cost ${d.avg_unit_cost ?? "—"} (used for profit)`}><span><Money value={d.last_unit_cost} /></span></Tooltip>} />
               <Fact label="Selling" value={<Money value={d.selling_price} />} />
               <Fact label="Margin" value={margin === null ? "—" : `${margin.toFixed(1)}%`} />
               <Fact label="Sold (30 days)" value={d.sold_last_30d} />
               <Fact label="Pace" value={`${d.velocity_30d}/month`} />
               <Fact label="Last sale" value={d.last_sale_on ? `${d.days_since_last_sale} days ago` : "Never"} />
+              <Fact label="Net revenue (30d)" value={<Money value={d.net_revenue_30d} compact />} />
+              <Fact label="Net profit (30d)" value={<Text span fw={700} c={d.net_profit_30d < 0 ? "red.7" : "teal.8"}><Money value={d.net_profit_30d} compact />{d.margin_pct_30d !== null ? ` · ${d.margin_pct_30d}%` : ""}</Text>} />
             </SimpleGrid>
-            <SectionCard title="Last 12 months">
-              {hist ? (
+            <SectionCard
+              title="Last 12 months"
+              actions={<SegmentedControl size="xs" value={histMode} onChange={(v) => setHistMode(v as "pieces" | "money")}
+                data={[{ value: "pieces", label: "Pieces" }, { value: "money", label: "Revenue & profit" }]} />}
+            >
+              {hist && histMode === "money" ? (
+                <BarChart
+                  h={220}
+                  data={hist.monthly}
+                  dataKey="label"
+                  series={[
+                    { name: "net_revenue", label: "Net revenue", color: "gold.6" },
+                    { name: "net_profit", label: "Net profit", color: "teal.6" },
+                  ]}
+                  valueFormatter={(v) => formatINR(v, { compact: true })}
+                  yAxisProps={{ width: 70 }}
+                  tickLine="none"
+                  gridAxis="y"
+                  withLegend
+                  barProps={{ radius: 4 }}
+                />
+              ) : hist ? (
                 <BarChart
                   h={220}
                   data={hist.monthly}

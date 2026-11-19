@@ -1,4 +1,4 @@
-"""Month / quarter (Indian financial year by default) / custom period helpers and period stock."""
+"""Day / month / quarter (Indian financial year by default) / custom period helpers and period stock."""
 from __future__ import annotations
 
 import calendar
@@ -42,6 +42,14 @@ class Period:
         return (self.end - self.start).days + 1
 
 
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _day(anchor: date) -> Period:
+    long = f"{WEEKDAYS[anchor.weekday()]}, {anchor.day} {MONTHS[anchor.month - 1]} {anchor.year}"
+    return Period("day", anchor, anchor, long, f"{anchor.day} {ABBR[anchor.month - 1]} {anchor.year}")
+
+
 def _month(anchor: date) -> Period:
     start = anchor.replace(day=1)
     end = anchor.replace(day=calendar.monthrange(anchor.year, anchor.month)[1])
@@ -75,6 +83,8 @@ def resolve(db: Session, period_type: str = "month", anchor: date | None = None,
             start: date | None = None, end: date | None = None) -> Period:
     period_type = (period_type or "month").lower()
     anchor = anchor or _today()
+    if period_type == "day":
+        return _day(anchor)
     if period_type == "month":
         return _month(anchor)
     if period_type == "quarter":
@@ -84,11 +94,11 @@ def resolve(db: Session, period_type: str = "month", anchor: date | None = None,
             raise AppError("INVALID_PERIOD", "Custom periods need a start and end date (end after start).", 422)
         lbl = f"{start.day} {ABBR[start.month - 1]} – {end.day} {ABBR[end.month - 1]} {end.year}"
         return Period("custom", start, end, lbl, lbl)
-    raise AppError("INVALID_PERIOD", "period_type must be month, quarter or custom", 422)
+    raise AppError("INVALID_PERIOD", "period_type must be day, month, quarter or custom", 422)
 
 
 def previous(db: Session, p: Period) -> Period:
-    if p.period_type in ("month", "quarter"):
+    if p.period_type in ("day", "month", "quarter"):
         return resolve(db, p.period_type, p.start - timedelta(days=1))
     length = p.days
     end = p.start - timedelta(days=1)
@@ -112,6 +122,10 @@ def to_out(db: Session, p: Period) -> dict:
 def options(db: Session) -> dict:
     t = _today()
     months, quarters = [], []
+    days = []
+    for i in range(31):
+        p = _day(t - timedelta(days=i))
+        days.append({"period_type": "day", "anchor": p.start, "label": p.label, "start": p.start, "end": p.end})
     y, m = t.year, t.month
     for _ in range(24):
         p = _month(date(y, m, 1))
@@ -124,7 +138,7 @@ def options(db: Session) -> dict:
         p = resolve(db, "quarter", anchor)
         quarters.append({"period_type": "quarter", "anchor": p.start, "label": p.label, "start": p.start, "end": p.end})
         anchor = p.start - timedelta(days=1)
-    return {"months": months, "quarters": quarters}
+    return {"days": days, "months": months, "quarters": quarters}
 
 
 # --- period stock ------------------------------------------------------------

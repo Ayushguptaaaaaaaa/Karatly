@@ -44,6 +44,9 @@ def build_pack(db: Session, p: period_service.Period) -> dict:
     overview = dashboard_service.overview(db, p)
     kpis = {k: (float(v) if isinstance(v, Decimal) else v) for k, v in overview["kpis"].items()}
 
+    from app.services import profit_service
+
+    prof = profit_service.design_profit(db, p.start, p.effective_end)
     cats = db.query(Category).filter(Category.is_active.is_(True)).order_by(Category.sort_order).all()
     cat_rows = []
     for c in cats:
@@ -57,6 +60,8 @@ def build_pack(db: Session, p: period_service.Period) -> dict:
             "stock_value_cost": round(float(sum((snap.states[d.id].stock_value_cost for d in mine), Decimal("0"))), 2),
             "sold_period": sp, "sold_prev_period": spp, "sales_value_period": round(sv, 2),
             "change_pct": round((sp - spp) / spp * 100, 1) if spp else None,
+            "net_revenue_period": round(sum(float(prof[d.id]["net_revenue"]) for d in mine if d.id in prof), 2),
+            "net_profit_period": round(sum(float(prof[d.id]["net_profit"]) for d in mine if d.id in prof), 2),
         })
 
     starts, monthly = metrics_service.monthly_sales(db, 12, by_category=True)

@@ -136,12 +136,39 @@ def export(db: Session, report: str, p: period_service.Period, **kw) -> tuple[st
 
         data = period_stock(db, p, kw.get("category_id"), None, kw.get("status"), None, "label", 1, 100000)
         heads = ["Label", "Name", "Category", "Subcategory", "Opening", "Added (new designs)", "Received", "Sold",
-                 "Customer returns", "Supplier returns", "Corrections", "Closing", "Sales value", "Status now"]
+                 "Customer returns", "Supplier returns", "Corrections", "Closing", "Sales value", "Net revenue",
+                 "Net profit", "Margin %", "Status now"]
         rows = [[r["design"]["label"], r["design"]["name"], r["design"]["category_name"], r["design"]["subcategory_name"],
                  r["opening"], r["opening_added"], r["received"], r["sold"], r["customer_returns"],
-                 r["supplier_returns"], r["adjustments_net"], r["closing"], r["sales_value"], r["status_now"]]
+                 r["supplier_returns"], r["adjustments_net"], r["closing"], r["sales_value"], r["net_revenue"],
+                 r["net_profit"], r["margin_pct"], r["status_now"]]
                 for r in data["rows"]["items"]]
-        return f"stock_{p.short_label}.xlsx", build_xlsx("Stock", heads, rows, {12})
+        return f"stock_{p.short_label}.xlsx", build_xlsx("Stock", heads, rows, {12, 13, 14})
+    if report == "profitability":
+        from app.services import profit_service
+
+        gb = kw.get("group_by") or "category"
+        data = profit_service.profitability(db, p, gb, kw.get("category_id"))
+        first = {"design": ["Label", "Name", "Category", "Subcategory"], "subcategory": ["Subcategory", "Category"],
+                 "category": ["Category"]}[gb]
+        heads = first + ["Pieces sold", "Returned", "Net pieces", "Gross sales", "Returns", "Net revenue",
+                         "Cost of goods", "Net profit", "Margin %"]
+
+        def lead(r):
+            if gb == "design":
+                return [r["label"], r["design_name"], r["category"], r["subcategory"]]
+            if gb == "subcategory":
+                return [r["name"], r["category"]]
+            return [r["name"]]
+
+        rows = [lead(r) + [r["units_sold"], r["units_returned"], r["net_units"], r["gross_sales"], r["returns_value"],
+                           r["net_revenue"], r["cogs"], r["net_profit"], r["margin_pct"]] for r in data["rows"]]
+        t = data["totals"]
+        rows.append(["TOTAL"] + [""] * (len(first) - 1) + [t["units_sold"], t["units_returned"], t["net_units"],
+                                                            t["gross_sales"], t["returns_value"], t["net_revenue"],
+                                                            t["cogs"], t["net_profit"], t["margin_pct"]])
+        n = len(first)
+        return f"profit_by_{gb}_{p.short_label}.xlsx", build_xlsx("Profitability", heads, rows, set(range(n + 3, n + 8)))
     if report == "sales_trend":
         data = sales_trend(db, 12, group_by="category")
         months = [pt["month"] for pt in data["series"][0]["points"]] if data["series"] else []

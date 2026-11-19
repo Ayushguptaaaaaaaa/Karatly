@@ -84,10 +84,20 @@ def movement_out(m: StockMovement) -> dict:
     }
 
 
-def category_card(c: Category, designs: list[Design], states: dict[int, DesignState]) -> dict:
+def profit_sum(design_ids: list[int], profit: dict[int, dict] | None) -> dict:
+    profit = profit or {}
+    nr = sum((profit[i]["net_revenue"] for i in design_ids if i in profit), money(0))
+    np_ = sum((profit[i]["net_profit"] for i in design_ids if i in profit), money(0))
+    return {"net_revenue_30d": money(nr), "net_profit_30d": money(np_),
+            "margin_pct_30d": round(float(np_ / nr * 100), 1) if nr else None}
+
+
+def category_card(c: Category, designs: list[Design], states: dict[int, DesignState],
+                  profit: dict[int, dict] | None = None) -> dict:
     mine = [d for d in designs if d.category_id == c.id and d.is_active]
     sts = [states[d.id] for d in mine]
     return {
+        **profit_sum([d.id for d in mine], profit),
         "id": c.id,
         "name": c.name,
         "label_prefix": c.label_prefix,

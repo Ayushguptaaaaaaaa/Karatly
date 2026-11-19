@@ -34,6 +34,7 @@ import {
   IconDiamond,
   IconFlame,
   IconLock,
+  IconReportMoney,
   IconPackage,
   IconShoppingBag,
   IconSparkles,
@@ -353,7 +354,9 @@ function Overview({ d }: { d: Dashboard }) {
     name: STATUS_META[s].label, value: d.stock_health[s], color: STATUS_META[s].hex, key: s,
   }));
   const totalDesigns = healthData.reduce((a, b) => a + b.value, 0);
-  const periodWord = d.period.period_type === "quarter" ? "this quarter" : "this month";
+  const periodWord = d.period.period_type === "day"
+    ? (d.period.is_current ? "today" : `on ${d.period.short_label}`)
+    : d.period.period_type === "quarter" ? "this quarter" : "this month";
 
   const block = (node: ReactNode, i: number) => (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} style={{ height: "100%" }}>
@@ -401,13 +404,18 @@ function Overview({ d }: { d: Dashboard }) {
 
       {block(<AiHeadlineCard d={d} />, 0)}
 
-      <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }} spacing="md">
+      <SimpleGrid cols={{ base: 1, xs: 2, lg: 3, xl: 5 }} spacing="md">
         {block(
           <KpiCard icon={<IconCoin size={20} />} label="Stock value (at cost)" value={k.stock_value_cost} format="inr-compact"
             sub={`${formatNumber(k.total_pieces)} pieces · ${formatNumber(k.total_designs)} designs`} spark={d.kpi_sparklines.stock_value_cost} />, 1)}
         {block(
           <KpiCard icon={<IconShoppingBag size={20} />} label={`Sales ${periodWord}`} value={k.sales_value} format="inr-compact" delta={k.sales_change_pct}
-            sub={`${formatNumber(k.sales_units)} pieces sold`} spark={d.kpi_sparklines.sales_value} color="teal" onClick={() => navigate("/app/reports?tab=sales")} />, 2)}
+            sub={`${formatNumber(k.sales_units)} pieces sold · net ${formatINR(k.net_revenue, { compact: true })} after returns`} spark={d.kpi_sparklines.sales_value} color="teal" onClick={() => navigate("/app/reports?tab=sales")} />, 2)}
+        {block(
+          <KpiCard icon={<IconReportMoney size={20} />} label={`Net profit ${periodWord}`} value={k.net_profit} format="inr-compact" delta={k.net_profit_change_pct}
+            valueColor={k.net_profit < 0 ? "red.7" : undefined} color="grape"
+            sub={`Margin ${k.profit_margin_pct === null ? "—" : `${k.profit_margin_pct}%`} · cost of goods ${formatINR(k.cogs, { compact: true })}`}
+            spark={d.kpi_sparklines.net_profit} onClick={() => navigate("/app/reports?tab=profit")} />, 3)}
         {block(
           <KpiCard icon={<IconAlertTriangle size={20} />} label="Needs attention" value={k.needs_attention} color="orange"
             valueColor={k.needs_attention ? "orange.8" : undefined} sub={`${k.out_of_stock} sold out · ${k.low_stock} low`}

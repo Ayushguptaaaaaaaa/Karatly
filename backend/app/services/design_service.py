@@ -15,6 +15,12 @@ from app.models.enums import Metal, MovementSource, MovementType
 from app.services import audit_service, data_version_service, metrics_service, settings_service, stock_service
 from app.services.serializers import design_detail, design_list_item, movement_out, photo_url
 
+def period_service_month_end(start: date) -> date:
+    import calendar
+
+    return start.replace(day=calendar.monthrange(start.year, start.month)[1])
+
+
 LABEL_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-/]{1,19}$")
 EDITABLE = ["name", "description", "metal", "purity", "weight_g", "cost_price", "selling_price", "supplier",
             "min_stock", "inflation_pct_override", "custom_fields", "subcategory_id", "category_id"]
@@ -50,9 +56,20 @@ def get(db: Session, design_id: int) -> Design:
 
 
 def detail(db: Session, design_id: int) -> dict:
+    from datetime import timedelta
+
+    from app.services import profit_service
+
     d = get(db, design_id)
     snap = metrics_service.snapshot(db)
-    return design_detail(d, snap.states[d.id])
+    out = design_detail(d, snap.states[d.id])
+    t = _today()
+    pr = profit_service.design_profit(db, t - timedelta(days=29), t, [d.id]).get(d.id)
+    out["avg_unit_cost"] = profit_service.avg_cost_map(db, [d.id]).get(d.id)
+    out["net_revenue_30d"] = pr["net_revenue"] if pr else 0
+    out["net_profit_30d"] = pr["net_profit"] if pr else 0
+    out["margin_pct_30d"] = profit_service.margin(pr["net_profit"], pr["net_revenue"]) if pr else None
+    return out
 
 
 def by_label(db: Session, label: str) -> dict:
@@ -365,6 +382,14 @@ def history(db: Session, design_id: int, months: int = 12) -> dict:
             monthly[mk]["sales_value"] += float((m.unit_price or 0) * m.quantity)
         elif m.type in (MovementType.PURCHASE, MovementType.OPENING):
             monthly[mk]["received"] += m.quantity
+    from app.services import profit_service
+
+    for s_ in starts:
+        mk = metrics_service.month_key(s_)
+        end_ = period_service_month_end(s_)
+        pr = profit_service.design_profit(db, s_, end_, [d.id]).get(d.id)
+        monthly[mk]["net_revenue"] = float(pr["net_revenue"]) if pr else 0.0
+        monthly[mk]["net_profit"] = float(pr["net_profit"]) if pr else 0.0
     return {
         "monthly": [{"month": metrics_service.month_key(s), "label": metrics_service.MONTH_ABBR[s.month - 1],
                      **monthly[metrics_service.month_key(s)]} for s in starts],

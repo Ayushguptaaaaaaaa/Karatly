@@ -78,6 +78,14 @@ function CategoryTile({ c, onEdit }: { c: Cat; onEdit: () => void }) {
       <Text size="sm" c="dimmed">
         {c.design_count} designs · {formatNumber(c.total_pieces)} pcs · <Money value={c.stock_value_cost} compact />
       </Text>
+      <Group gap={6} mt={6}>
+        <Text size="xs" c="dimmed">30 days:</Text>
+        <Text size="xs" fw={600}>Net revenue <Money value={c.net_revenue_30d} compact /></Text>
+        <Text size="xs" fw={700} c={c.net_profit_30d < 0 ? "red.7" : "teal.8"}>
+          Profit <Money value={c.net_profit_30d} compact />
+          {c.margin_pct_30d !== null ? ` (${c.margin_pct_30d}%)` : ""}
+        </Text>
+      </Group>
       <Box mt="sm">
         <StatusBar c={c} />
       </Box>

@@ -36,7 +36,7 @@ class ErrorBody(BaseModel):
     error: ErrorDetail
 
 
-PeriodType = Literal["month", "quarter", "custom"]
+PeriodType = Literal["day", "month", "quarter", "custom"]
 
 
 class PeriodOut(BaseModel):

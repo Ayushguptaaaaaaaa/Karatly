@@ -9,7 +9,17 @@ from app.core.errors import AppError
 from app.models import Category, Design, Subcategory, User
 from app.models.enums import CATEGORY_ICONS
 from app.services import audit_service, data_version_service, metrics_service
-from app.services.serializers import category_card, subcategory_out
+from app.services.serializers import category_card, profit_sum, subcategory_out
+
+
+def _profit_30d(db: Session) -> dict[int, dict]:
+    from datetime import timedelta
+
+    from app.core.clock import today
+    from app.services import profit_service
+
+    t = today()
+    return profit_service.design_profit(db, t - timedelta(days=29), t)
 
 PREFIX_RE = re.compile(r"^[A-Z]{1,5}$")
 VOWELS = set("AEIOU")
@@ -49,19 +59,22 @@ def cards(db: Session, include_inactive: bool = False) -> list[dict]:
     if not include_inactive:
         q = q.filter(Category.is_active.is_(True))
     designs = list(snap.designs.values())
-    return [category_card(c, designs, snap.states) for c in q.all()]
+    profit = _profit_30d(db)
+    return [category_card(c, designs, snap.states, profit) for c in q.all()]
 
 
 def card(db: Session, category_id: int) -> dict:
     c = get(db, category_id)
     snap = metrics_service.snapshot(db)
     designs = list(snap.designs.values())
-    out = category_card(c, designs, snap.states)
+    profit = _profit_30d(db)
+    out = category_card(c, designs, snap.states, profit)
     subs = []
     for s in c.subcategories:
         mine = [d for d in designs if d.subcategory_id == s.id and d.is_active]
         subs.append({**subcategory_out(s), "design_count": len(mine),
-                     "total_pieces": sum(snap.states[d.id].current_stock for d in mine)})
+                     "total_pieces": sum(snap.states[d.id].current_stock for d in mine),
+                     **profit_sum([d.id for d in mine], profit)})
     out["subcategories"] = subs
     return out
 
