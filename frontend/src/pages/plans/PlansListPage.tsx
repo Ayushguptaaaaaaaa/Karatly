@@ -1,13 +1,12 @@
-import { Badge, Box, Button, Drawer, Group, Paper, SimpleGrid, Skeleton, Stack, Table, Text, ThemeIcon, UnstyledButton } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { Badge, Box, Button, Group, Paper, SimpleGrid, Skeleton, Stack, Text, ThemeIcon, UnstyledButton } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconCategory, IconChevronRight, IconListCheck, IconPlus, IconShoppingCart, IconSparkles } from "@tabler/icons-react";
+import { IconArrowRight, IconChevronRight, IconPlus, IconShoppingCart, IconSparkles } from "@tabler/icons-react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { errorMessage } from "../../api/client";
-import { useCreatePlan, useCreatePlansByCategory, usePlans, useReorderBaseline } from "../../api/hooks";
+import { useCreatePlan, usePlans } from "../../api/hooks";
 import type { PlanStatus, PlanSummary } from "../../api/types";
-import { DemandBadge, EmptyBox, ErrorState, LabelCode, Money, PageHeader, StatusBadge } from "../../components/ui";
+import { EmptyBox, ErrorState, Money, PageHeader } from "../../components/ui";
 import { formatINR, formatRelative } from "../../lib/format";
 import { useAuth } from "../../stores";
 
@@ -18,6 +17,8 @@ export const PLAN_STATUS: Record<PlanStatus, { label: string; color: string }> =
   RECEIVED: { label: "Received", color: "gold" },
 };
 
+const isOpen = (p: PlanSummary) => p.status === "DRAFT" || p.status === "SUBMITTED";
+
 function PlanRow({ p, i }: { p: PlanSummary; i: number }) {
   const navigate = useNavigate();
   return (
@@ -26,29 +27,25 @@ function PlanRow({ p, i }: { p: PlanSummary; i: number }) {
         <Paper className="soft-card lift" p="md" radius="md">
           <Group justify="space-between" wrap="wrap" gap="sm">
             <Group gap="md" wrap="nowrap" style={{ minWidth: 0 }}>
-              <ThemeIcon size={44} radius="xl" variant="light" color={p.source === "AI" ? "gold" : "gray"}>
-                {p.source === "AI" ? <IconSparkles size={22} /> : <IconShoppingCart size={22} />}
+              <ThemeIcon size={40} radius="xl" variant="light" color={p.source === "AI" ? "gold" : "gray"}>
+                {p.source === "AI" ? <IconSparkles size={20} /> : <IconShoppingCart size={20} />}
               </ThemeIcon>
               <Box style={{ minWidth: 0 }}>
                 <Group gap="xs">
                   <Text fw={700} truncate>{p.title}</Text>
-                  <Badge variant="light" color={p.scope === "ALL" ? "grape" : "blue"}>
-                    {p.scope === "ALL" ? "Final · all categories" : p.category_name ?? "Category"}
-                  </Badge>
                   <Badge color={PLAN_STATUS[p.status].color}>{PLAN_STATUS[p.status].label}</Badge>
-                  {p.source === "AI" && <Badge variant="outline" color="gold">AI ✨</Badge>}
                 </Group>
                 <Text size="xs" c="dimmed">
-                  {p.item_count} designs · created {formatRelative(p.created_at)} by {p.created_by ?? "AI"}
-                  {p.status !== "DRAFT" && p.status !== "SUBMITTED" ? ` · ${p.approved_count} approved, ${p.rejected_count} rejected` : ""}
+                  {isOpen(p) ? `${p.buying_count} of ${p.item_count} designs to buy` : `${p.approved_count} designs bought`}
+                  {" · "}created {formatRelative(p.created_at)}
                 </Text>
               </Box>
             </Group>
             <Group gap="lg" wrap="nowrap">
               <Box ta="right">
-                <Text size="xs" c="dimmed">{p.status === "DRAFT" || p.status === "SUBMITTED" ? "Estimated" : "Approved"}</Text>
+                <Text size="xs" c="dimmed">{isOpen(p) ? "Capital required" : "Approved"}</Text>
                 <Text className="serif" fw={700} fz="lg">
-                  <Money value={p.status === "DRAFT" || p.status === "SUBMITTED" ? p.total_estimated : p.total_approved} compact />
+                  <Money value={isOpen(p) ? p.total_estimated : p.total_approved} compact />
                 </Text>
               </Box>
               <IconChevronRight color="var(--jaa-muted)" />
@@ -60,110 +57,95 @@ function PlanRow({ p, i }: { p: PlanSummary; i: number }) {
   );
 }
 
-export default function PlansListPage() {
+function CurrentPlanCard({ p }: { p: PlanSummary }) {
   const navigate = useNavigate();
   const owner = useAuth((s) => s.user?.role === "OWNER");
+  const waiting = p.status === "SUBMITTED" || owner;
+  return (
+    <Paper className="soft-card" p="xl" radius="lg" mb="xl" style={{ borderLeft: "4px solid var(--mantine-color-gold-5)" }}>
+      <Group justify="space-between" align="flex-start" wrap="wrap" gap="lg">
+        <Box>
+          <Group gap="xs" mb={6}>
+            <Badge color={PLAN_STATUS[p.status].color}>{PLAN_STATUS[p.status].label}</Badge>
+            {p.source === "AI" && <Badge variant="outline" color="gold">AI suggested ✨</Badge>}
+          </Group>
+          <Text className="serif" fw={700} fz={26}>{p.title}</Text>
+          <Text size="sm" c="dimmed" mt={4}>
+            {waiting
+              ? "Check the quantities, change anything you like (0 = don't buy this month), then approve."
+              : "Check the quantities, then send it to the owner for approval."}
+          </Text>
+        </Box>
+        <SimpleGrid cols={2} spacing="xl">
+          <Box>
+            <Text size="xs" c="dimmed">Total capital required</Text>
+            <Text className="serif" fw={800} fz={30} lh={1.15}>{formatINR(p.total_estimated, { compact: true })}</Text>
+            {p.budget_limit ? <Text size="xs" c="dimmed">monthly budget {formatINR(p.budget_limit, { compact: true })}</Text> : null}
+          </Box>
+          <Box>
+            <Text size="xs" c="dimmed">Designs to buy</Text>
+            <Text fw={800} fz={30} lh={1.15}>{p.buying_count}<Text span size="sm" c="dimmed"> / {p.item_count}</Text></Text>
+          </Box>
+        </SimpleGrid>
+      </Group>
+      <Group justify="flex-end" mt="lg">
+        <Button size="md" rightSection={<IconArrowRight size={18} />} onClick={() => navigate(`/app/purchase-plans/${p.id}`)}>
+          {waiting ? "Review & approve" : "Open plan"}
+        </Button>
+      </Group>
+    </Paper>
+  );
+}
+
+export default function PlansListPage() {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = usePlans();
   const create = useCreatePlan();
-  const byCat = useCreatePlansByCategory();
-  const [baseOpen, { open: openBase, close: closeBase }] = useDisclosure(false);
-  const { data: base } = useReorderBaseline();
 
   const createPlan = () =>
-    create.mutateAsync({})
+    create.mutateAsync()
       .then((p) => navigate(`/app/purchase-plans/${p.id}`))
       .catch((e) => notifications.show({ color: "orange", message: errorMessage(e) }));
-  const createByCategory = () =>
-    byCat.mutateAsync()
-      .then((ps) => notifications.show({ color: "teal", title: `${ps.length} category plans created`,
-        message: ps.map((p) => `${p.category_name}: ${formatINR(p.total_estimated, { compact: true })}`).join(" · ") }))
-      .catch((e) => notifications.show({ color: "orange", message: errorMessage(e) }));
 
-  const waiting = (data ?? []).filter((p) => p.status === "SUBMITTED" || (p.status === "DRAFT" && p.source === "AI"));
-  const rest = (data ?? []).filter((p) => !waiting.includes(p));
-  const finals = rest.filter((p) => p.scope === "ALL");
-  const cats = rest.filter((p) => p.scope === "CATEGORY");
-  const openCats = cats.filter((p) => p.status === "DRAFT" || p.status === "SUBMITTED");
-  const catTotal = openCats.reduce((a, p) => a + p.total_estimated, 0);
+  const open = (data ?? []).filter(isOpen);
+  const current = open[0];
+  const olderOpen = open.slice(1);
+  const history = (data ?? []).filter((p) => !isOpen(p));
 
   return (
     <>
       <PageHeader
         title="Purchase Plans"
-        subtitle="What to restock, how many, and the budget. The AI suggests, the owner approves."
-        actions={
-          <>
-            <Button variant="default" leftSection={<IconListCheck size={16} />} onClick={openBase}>View reorder suggestions</Button>
-            <Button variant="default" leftSection={<IconCategory size={16} />} onClick={createByCategory} loading={byCat.isPending}>Create plans by category</Button>
-            <Button leftSection={<IconPlus size={16} />} onClick={createPlan} loading={create.isPending}>Create final plan (all categories)</Button>
-          </>
-        }
+        subtitle="One plan at a time. The AI suggests what to buy and how many; you change any quantity and approve."
       />
       {isError && <ErrorState onRetry={() => refetch()} />}
-      {isLoading && <Stack>{[1, 2, 3].map((i) => <Skeleton key={i} h={76} radius="md" />)}</Stack>}
-      {data && data.length === 0 && (
+      {isLoading && <Stack>{[1, 2].map((i) => <Skeleton key={i} h={120} radius="md" />)}</Stack>}
+
+      {data && current && <CurrentPlanCard p={current} />}
+      {data && !current && (
         <EmptyBox
           icon={<IconShoppingCart size={30} />}
-          title="No purchase plans yet"
-          text="Generate AI insights to get a smart plan, or create one from current reorder needs."
-          action={<Button onClick={() => navigate("/app/insights")} leftSection={<IconSparkles size={16} />}>Generate AI insights</Button>}
-          secondary={<Button variant="default" onClick={createPlan}>Create from current needs</Button>}
+          title="No plan waiting"
+          text="Create this month's plan from your current stock and sales. Running AI insights also creates it."
+          action={<Button onClick={createPlan} loading={create.isPending} leftSection={<IconPlus size={16} />}>Create this month's plan</Button>}
+          secondary={<Button variant="default" onClick={() => navigate("/app/insights")} leftSection={<IconSparkles size={16} />}>Generate AI insights</Button>}
         />
       )}
-      {waiting.length > 0 && (
+
+      {olderOpen.length > 0 && (
         <Box mb="xl">
-          <Text fw={700} mb="sm">{owner ? "Waiting for your approval" : "Waiting for owner approval"}</Text>
-          <Stack gap="sm">{waiting.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
-        </Box>
-      )}
-      {finals.length > 0 && (
-        <Box mb="xl">
-          <Text fw={700} mb="sm">Final plans (all categories)</Text>
-          <Stack gap="sm">{finals.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
-        </Box>
-      )}
-      {cats.length > 0 && (
-        <Box>
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>Category plans</Text>
-            {openCats.length > 0 && (
-              <Text size="sm" c="dimmed">
-                Open category plans need <b className="num">{formatINR(catTotal, { compact: true })}</b> in total
-                {base && base.budget > 0 ? ` · monthly budget ${formatINR(base.budget, { compact: true })}` : ""}
-              </Text>
-            )}
-          </Group>
-          <Stack gap="sm">{cats.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
+          <Text fw={700}>Older open plans</Text>
+          <Text size="xs" c="dimmed" mb="sm">These have your edits, so they were kept. Approve or delete them.</Text>
+          <Stack gap="sm">{olderOpen.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
         </Box>
       )}
 
-      <Drawer opened={baseOpen} onClose={closeBase} position="right" size="xl" title={<Text fw={700}>Reorder suggestions (live, no AI)</Text>}>
-        {base && (
-          <Stack>
-            <SimpleGrid cols={2}>
-              <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Designs to restock</Text><Text fw={700} fz="xl">{base.items.length}</Text></Paper>
-              <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Estimated budget</Text><Text fw={700} fz="xl">{formatINR(base.total_estimated, { compact: true })}</Text></Paper>
-            </SimpleGrid>
-            <Table fz="sm" striped>
-              <Table.Thead><Table.Tr><Table.Th>Design</Table.Th><Table.Th>Now</Table.Th><Table.Th ta="right">Qty</Table.Th><Table.Th ta="right">Total</Table.Th></Table.Tr></Table.Thead>
-              <Table.Tbody>
-                {base.items.map((i) => (
-                  <Table.Tr key={i.design.id}>
-                    <Table.Td>
-                      <LabelCode>{i.design.label}</LabelCode> <Text span size="xs" c="dimmed">usual stock {i.usual_stock}</Text>
-                      <Text size="xs" c="dimmed" lineClamp={2}>{i.reason}</Text>
-                    </Table.Td>
-                    <Table.Td><Stack gap={2}><StatusBadge status={i.status} size="xs" /><DemandBadge demand={i.demand_class} size="xs" /></Stack></Table.Td>
-                    <Table.Td ta="right" className="num">{i.suggested_qty}</Table.Td>
-                    <Table.Td ta="right" className="num">{formatINR(i.line_total, { compact: true })}</Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-            {base.items.length > 0 && <Button onClick={createPlan} loading={create.isPending}>Turn into a purchase plan</Button>}
-          </Stack>
-        )}
-      </Drawer>
+      {history.length > 0 && (
+        <Box mt="xl">
+          <Text fw={700} mb="sm">Past plans</Text>
+          <Stack gap="sm">{history.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
+        </Box>
+      )}
     </>
   );
 }

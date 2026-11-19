@@ -117,7 +117,7 @@ export interface ReorderItem {
   design: { id: number; label: string; name: string | null; photo_url: string | null; category_name: string };
   current_stock: number; min_stock: number; status: StockStatus; demand_class: DemandClass; velocity_30d: number;
   suggested_qty: number; priority: Priority; reason: string; last_unit_cost: number; inflation_pct: number;
-  usual_stock: number; max_qty: number;
+  usual_stock: number; max_qty: number; on_order: number;
   expected_unit_cost: number; line_total: number; formula_text: string;
 }
 
@@ -126,18 +126,18 @@ export interface PlanSummary {
   item_count: number; total_estimated: number; total_approved: number; approved_count: number; rejected_count: number;
   pending_count: number; period_label: string | null;
   scope: "ALL" | "CATEGORY"; category_id: number | null; category_name: string | null;
-  budget_limit: number | null; budget_note: string | null;
+  budget_limit: number | null; budget_note: string | null; buying_count: number;
 }
 export interface PlanItem {
   id: number; design: { id: number; label: string; name: string | null; photo_url: string | null; category_name: string };
   current_stock: number; current_stock_at_creation: number; status: StockStatus; demand_class: DemandClass;
   suggested_qty: number; final_qty: number; last_unit_cost: number; inflation_pct: number; expected_unit_cost: number;
   line_total: number; priority: Priority; reason: string | null; decision: Decision; decision_note: string | null;
-  received_qty: number; formula_text: string;
+  received_qty: number; formula_text: string; edited: boolean;
 }
 export interface PlanDetail extends PlanSummary {
   notes: string | null; insight_run_id: number | null; items: PlanItem[];
-  total_capital_required: number; within_budget: boolean | null;
+  total_capital_required: number; within_budget: boolean | null; suggested_total: number;
   by_category: { category: string; amount_estimated: number; amount_approved: number }[];
 }
 

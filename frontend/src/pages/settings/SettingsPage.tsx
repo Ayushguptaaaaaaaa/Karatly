@@ -59,7 +59,7 @@ export default function SettingsPage() {
                   </Group>
                   <NumberInput
                     label="Monthly purchase budget"
-                    description="The final purchase plan is trimmed to fit this (high-priority designs first). 0 = no limit."
+                    description="The AI fits its suggestions to this (high-priority designs first). You can still change any quantity. 0 = no limit."
                     prefix="₹" min={0} thousandSeparator="," thousandsGroupStyle="lakh"
                     value={form.monthly_purchase_budget} onChange={(v) => set("monthly_purchase_budget", Number(v) || 0)}
                   />

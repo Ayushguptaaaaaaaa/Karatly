@@ -1,7 +1,7 @@
 import { ActionIcon, Avatar, Box, Button, CopyButton, Group, Menu, Paper, ScrollArea, Stack, Table, Text, Textarea, ThemeIcon, Tooltip, UnstyledButton } from "@mantine/core";
 import { BarChart, DonutChart, LineChart } from "@mantine/charts";
 import { notifications } from "@mantine/notifications";
-import { IconArrowUp, IconCheck, IconCopy, IconHistory, IconMessagePlus, IconSparkles } from "@tabler/icons-react";
+import { IconArrowUp, IconCheck, IconCopy, IconHistory, IconMessagePlus, IconMinus, IconSparkles } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -156,7 +156,7 @@ function Bubble({ m, onAsk }: { m: ChatMessage; onAsk: (q: string) => void }) {
   );
 }
 
-export function ChatPanel({ height = "100%" }: { height?: string | number }) {
+export function ChatPanel({ height = "100%", onMinimize }: { height?: string | number; onMinimize?: () => void }) {
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
   const [sessionId, setSessionId] = useState<number | null>(() => {
@@ -234,7 +234,7 @@ export function ChatPanel({ height = "100%" }: { height?: string | number }) {
             <Text size="xs" c="dimmed">Answers from your real shop data</Text>
           </Box>
         </Group>
-        <Group gap={4}>
+        <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
           <Menu position="bottom-end" width={260} withinPortal>
             <Menu.Target>
               <ActionIcon variant="subtle" aria-label="Chat history"><IconHistory size={18} /></ActionIcon>
@@ -254,6 +254,13 @@ export function ChatPanel({ height = "100%" }: { height?: string | number }) {
               <IconMessagePlus size={18} />
             </ActionIcon>
           </Tooltip>
+          {onMinimize && (
+            <Tooltip label="Minimize chat">
+              <ActionIcon variant="subtle" aria-label="Minimize chat" onClick={onMinimize}>
+                <IconMinus size={18} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
       </Group>
 

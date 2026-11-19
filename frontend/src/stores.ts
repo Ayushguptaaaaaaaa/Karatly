@@ -87,6 +87,8 @@ interface UiState {
   openQuickStock: (mode?: "IN" | "OUT", designId?: number | null) => void;
   closeQuickStock: () => void;
   setInsightsSeen: (id: number) => void;
+  chatMinimized: boolean;
+  setChatMinimized: (v: boolean) => void;
 }
 
 export const useUi = create<UiState>()(
@@ -108,10 +110,12 @@ export const useUi = create<UiState>()(
         set({ quickStockOpen: true, quickStockMode: mode, quickStockDesignId: designId }),
       closeQuickStock: () => set({ quickStockOpen: false, quickStockDesignId: null }),
       setInsightsSeen: (id) => set({ insightsSeenRunId: id }),
+      chatMinimized: false,
+      setChatMinimized: (chatMinimized) => set({ chatMinimized }),
     }),
     {
       name: "jaa.ui",
-      partialize: (s) => ({ navCollapsed: s.navCollapsed, designView: s.designView, insightsSeenRunId: s.insightsSeenRunId }),
+      partialize: (s) => ({ navCollapsed: s.navCollapsed, designView: s.designView, insightsSeenRunId: s.insightsSeenRunId, chatMinimized: s.chatMinimized }),
     },
   ),
 );

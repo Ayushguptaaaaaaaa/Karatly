@@ -21,21 +21,19 @@ import {
   TextInput,
   Tooltip,
 } from "@mantine/core";
-import { DonutChart } from "@mantine/charts";
 import { DateInput } from "@mantine/dates";
 import { useDebouncedCallback, useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
-import { IconCheck, IconDownload, IconInfoCircle, IconPrinter, IconSend, IconTrash, IconTruckDelivery, IconX } from "@tabler/icons-react";
+import { IconCheck, IconDownload, IconInfoCircle, IconPrinter, IconRefresh, IconSend, IconTruckDelivery } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { download, errorMessage } from "../../api/client";
-import { useDecidePlan, useDeletePlan, usePatchPlan, usePatchPlanItem, usePlan, useReceivePlan, useRemovePlanItem, useSubmitPlan } from "../../api/hooks";
-import type { Decision, PlanDetail, PlanItem } from "../../api/types";
-import { DemandBadge, EmptyBox, LabelCode, Money, PhotoThumb, StatusBadge } from "../../components/ui";
+import { useCreatePlan, useDecidePlan, useDeletePlan, usePatchPlan, usePatchPlanItem, usePlan, useReceivePlan, useSubmitPlan } from "../../api/hooks";
+import type { PlanDetail, PlanItem } from "../../api/types";
+import { DemandBadge, EmptyBox, LabelCode, PhotoThumb, StatusBadge } from "../../components/ui";
 import { milestone } from "../../lib/confetti";
-import { CATEGORY_COLORS } from "../../lib/constants";
 import { formatINR, todayISO } from "../../lib/format";
 import { useAuth } from "../../stores";
 import { PLAN_STATUS } from "./PlansListPage";
@@ -43,46 +41,34 @@ import { PLAN_STATUS } from "./PlansListPage";
 const PRIO: Record<string, string> = { HIGH: "red", MEDIUM: "orange", LOW: "gray" };
 const STEP_INDEX = { DRAFT: 0, SUBMITTED: 1, DECIDED: 2, RECEIVED: 3 } as const;
 
-function QtyInput({ plan, item }: { plan: PlanDetail; item: PlanItem }) {
+function QtyInput({ plan, item, value, onLocal }: { plan: PlanDetail; item: PlanItem; value: number; onLocal: (n: number) => void }) {
   const patch = usePatchPlanItem();
-  const [v, setV] = useState<number | string>(item.final_qty);
-  useEffect(() => setV(item.final_qty), [item.final_qty]);
   const save = useDebouncedCallback((q: number) => {
     patch.mutateAsync({ planId: plan.id, itemId: item.id, final_qty: q }).catch((e) => notifications.show({ color: "red", message: errorMessage(e) }));
-  }, 500);
-  const editable = plan.status === "DRAFT" || plan.status === "SUBMITTED";
-  if (!editable) return <Text fw={700} className="num">{item.final_qty}</Text>;
+  }, 600);
+  const set = (n: number) => {
+    onLocal(n);
+    save(n);
+  };
   return (
-    <NumberInput
-      size="xs"
-      w={80}
-      min={0}
-      max={10000}
-      value={v}
-      onChange={(x) => {
-        setV(x);
-        const n = Math.max(0, Math.floor(Number(x) || 0));
-        save(n);
-      }}
-      aria-label={`Quantity for ${item.design.label}`}
-    />
-  );
-}
-
-function DecisionToggle({ value, onChange, disabled }: { value: Decision; onChange: (d: Decision) => void; disabled?: boolean }) {
-  return (
-    <SegmentedControl
-      size="xs"
-      value={value}
-      disabled={disabled}
-      onChange={(v) => onChange(v as Decision)}
-      color={value === "APPROVED" ? "teal" : value === "REJECTED" ? "red" : "gray"}
-      data={[
-        { value: "APPROVED", label: <Tooltip label="Approve"><IconCheck size={14} aria-label="Approve" /></Tooltip> },
-        { value: "PENDING", label: "–" },
-        { value: "REJECTED", label: <Tooltip label="Reject"><IconX size={14} aria-label="Reject" /></Tooltip> },
-      ]}
-    />
+    <Group gap={6} wrap="nowrap">
+      <NumberInput
+        size="sm"
+        w={88}
+        min={0}
+        max={10000}
+        value={value}
+        onChange={(x) => set(Math.max(0, Math.floor(Number(x) || 0)))}
+        aria-label={`Quantity for ${item.design.label}`}
+        styles={{ input: { fontWeight: 700 } }}
+      />
+      <Stack gap={0}>
+        {value > 0 && <Anchor component="button" size="xs" c="dimmed" onClick={() => set(0)}>skip</Anchor>}
+        {value !== item.suggested_qty && (
+          <Anchor component="button" size="xs" onClick={() => set(item.suggested_qty)}>use {item.suggested_qty}</Anchor>
+        )}
+      </Stack>
+    </Group>
   );
 }
 
@@ -139,87 +125,102 @@ export default function PlanDetailPage() {
   const isMobile = useMediaQuery("(max-width: 48em)");
   const { data: plan, isLoading, isError } = usePlan(id);
   const patchPlan = usePatchPlan();
-  const patchItem = usePatchPlanItem();
-  const removeItem = useRemovePlanItem();
+  const refresh = useCreatePlan();
   const submit = useSubmitPlan();
   const decide = useDecidePlan();
   const del = useDeletePlan();
   const [recvOpen, { open: openRecv, close: closeRecv }] = useDisclosure(false);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
-  const [highlight, setHighlight] = useState<number[]>([]);
+  const [cat, setCat] = useState("ALL");
+  // quantities typed but not yet confirmed by the server: totals update instantly
+  const [local, setLocal] = useState<Record<number, number>>({});
   useEffect(() => {
     if (plan) {
       setTitle(plan.title);
       setNotes(plan.notes ?? "");
     }
   }, [plan?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!plan) return;
+    setLocal((prev) => {
+      const next: Record<number, number> = {};
+      for (const it of plan.items) if (prev[it.id] !== undefined && prev[it.id] !== it.final_qty) next[it.id] = prev[it.id];
+      return next;
+    });
+  }, [plan]);
 
-  const catSum = useMemo(() => {
-    const m: Record<string, { lines: number; total: number }> = {};
+  const q = (i: PlanItem) => local[i.id] ?? i.final_qty;
+  const lineTotal = (i: PlanItem) => q(i) * i.expected_unit_cost;
+
+  const cats = useMemo(() => {
+    const m: Record<string, { lines: number; buying: number; total: number }> = {};
     plan?.items.forEach((i) => {
-      const c = (m[i.design.category_name] ??= { lines: 0, total: 0 });
+      const c = (m[i.design.category_name] ??= { lines: 0, buying: 0, total: 0 });
       c.lines += 1;
-      c.total += i.line_total;
+      if ((local[i.id] ?? i.final_qty) > 0) c.buying += 1;
+      c.total += (local[i.id] ?? i.final_qty) * i.expected_unit_cost;
     });
     return m;
-  }, [plan]);
+  }, [plan, local]);
 
-  const sums = useMemo(() => {
-    const s = { approved: 0, pending: 0, rejected: 0 };
-    plan?.items.forEach((i) => {
-      if (i.decision === "APPROVED") s.approved += i.line_total;
-      else if (i.decision === "REJECTED") s.rejected += i.line_total;
-      else s.pending += i.line_total;
-    });
-    return s;
-  }, [plan]);
-
-  if (isError) return <EmptyBox title="Plan not found" action={<Button onClick={() => navigate("/app/purchase-plans")}>Back to plans</Button>} />;
+  if (isError) return <EmptyBox title="This plan no longer exists" text="It was replaced by the current plan." action={<Button onClick={() => navigate("/app/purchase-plans")}>Go to purchase plans</Button>} />;
   if (isLoading || !plan) return <Skeleton h={300} radius="md" />;
 
   const editable = plan.status === "DRAFT" || plan.status === "SUBMITTED";
-  const canDecide = owner && editable;
+  const done = plan.status === "DECIDED" || plan.status === "RECEIVED";
+  const total = Object.values(cats).reduce((a, c) => a + c.total, 0);
+  const buying = Object.values(cats).reduce((a, c) => a + c.buying, 0);
+  const overBudget = !!plan.budget_limit && total > plan.budget_limit + 0.5;
   const err = (e: unknown) => notifications.show({ color: "red", message: errorMessage(e) });
-  const setDecision = (item: PlanItem, d: Decision) => patchItem.mutateAsync({ planId: plan.id, itemId: item.id, decision: d }).catch(err);
+  const pendingQty = () => Object.entries(local).map(([itemId, final_qty]) => ({ item_id: Number(itemId), final_qty }));
+  const rows = plan.items.filter((i) => cat === "ALL" || i.design.category_name === cat);
 
-  const saveDecisions = () =>
-    decide.mutateAsync({ id: plan.id }).then(() => {
-      milestone("first_plan_approved");
-      notifications.show({ color: "teal", message: "Decisions saved" });
-    }).catch((e) => {
-      const ids = (e?.details?.pending_item_ids as number[]) ?? [];
-      setHighlight(ids);
-      err(e);
+  const approve = () =>
+    modals.openConfirmModal({
+      title: "Approve this plan?",
+      children: (
+        <Stack gap={6}>
+          <Text size="sm">You will buy <b>{buying}</b> designs for <b>{formatINR(total)}</b>.</Text>
+          {plan.item_count - buying > 0 && <Text size="sm" c="dimmed">{plan.item_count - buying} designs set to 0 will not be bought this month.</Text>}
+          {overBudget && <Text size="sm" c="red">This is above your monthly budget of {formatINR(plan.budget_limit!)}.</Text>}
+        </Stack>
+      ),
+      labels: { confirm: "Approve plan", cancel: "Cancel" },
+      confirmProps: { color: "teal" },
+      onConfirm: () => decide.mutateAsync({ id: plan.id, approve_all: true, decisions: pendingQty() }).then(() => {
+        milestone("first_plan_approved");
+        notifications.show({ color: "teal", title: "Plan approved ✨", message: "Mark stock as received when it arrives." });
+      }).catch(err),
     });
 
-  const approveAll = () =>
+  const refreshPlan = () =>
+    refresh.mutateAsync().then((p) => {
+      notifications.show({ color: "teal", message: "Suggestions updated. Quantities you changed were kept." });
+      if (p.id !== plan.id) navigate(`/app/purchase-plans/${p.id}`);
+    }).catch(err);
+
+  const removePlan = () =>
     modals.openConfirmModal({
-      title: "Approve all pending lines?",
-      children: <Text size="sm">Every line still pending will be approved. Total to approve: <b>{formatINR(sums.approved + sums.pending)}</b>.</Text>,
-      labels: { confirm: "Approve all", cancel: "Cancel" },
-      onConfirm: () => decide.mutateAsync({ id: plan.id, approve_all: true }).then(() => {
-        milestone("first_plan_approved");
-        notifications.show({ color: "teal", title: "Plan approved ✨", message: "You can mark stock as received when it arrives." });
-      }).catch(err),
+      title: done ? "Cancel this approved plan?" : "Delete this plan?",
+      children: <Text size="sm">{done ? "Nothing has been received yet. The order is cancelled and these designs will be suggested again." : "You can create a fresh plan any time."}</Text>,
+      labels: { confirm: done ? "Cancel plan" : "Delete", cancel: "Keep" },
+      confirmProps: { color: "red" },
+      onConfirm: () => del.mutateAsync(plan.id).then(() => navigate("/app/purchase-plans")).catch(err),
     });
 
   return (
     <>
       <Breadcrumbs mb="sm">
         <Anchor component={Link} to="/app/purchase-plans" size="sm">Purchase Plans</Anchor>
-        <Text size="sm">#{plan.id}</Text>
+        <Text size="sm">{plan.title}</Text>
       </Breadcrumbs>
       <Paper className="soft-card" p="lg" radius="lg" mb="lg">
         <Group justify="space-between" wrap="wrap" gap="md" align="flex-start">
           <Box style={{ flex: 1, minWidth: 260 }}>
             <Group gap="xs" mb={4}>
               <Badge color={PLAN_STATUS[plan.status].color}>{PLAN_STATUS[plan.status].label}</Badge>
-              {plan.source === "AI" && <Badge variant="outline" color="gold">AI ✨</Badge>}
-              <Badge variant="light" color={plan.scope === "ALL" ? "grape" : "blue"}>
-                {plan.scope === "ALL" ? "Final plan · all categories" : `Category · ${plan.category_name ?? ""}`}
-              </Badge>
-              {plan.period_label && <Badge variant="light" color="gray">{plan.period_label}</Badge>}
+              {plan.source === "AI" && <Badge variant="outline" color="gold">AI suggested ✨</Badge>}
             </Group>
             {editable ? (
               <TextInput
@@ -233,116 +234,137 @@ export default function PlanDetailPage() {
             ) : (
               <Text className="serif" fz={26} fw={700}>{plan.title}</Text>
             )}
+            {editable && (
+              <Text size="sm" c="dimmed">Change any quantity (0 = don't buy this month). The total updates as you type.</Text>
+            )}
           </Box>
-          <Stepper active={STEP_INDEX[plan.status] + (plan.status === "RECEIVED" ? 1 : 0)} size="xs" w={isMobile ? "100%" : 480} orientation={isMobile ? "vertical" : "horizontal"}>
+          <Stepper active={STEP_INDEX[plan.status] + (plan.status === "RECEIVED" ? 1 : 0)} size="xs" w={isMobile ? "100%" : 440} orientation={isMobile ? "vertical" : "horizontal"}>
             <Stepper.Step label="Draft" />
-            <Stepper.Step label="Submitted" />
-            <Stepper.Step label="Decided" />
+            <Stepper.Step label="With owner" />
+            <Stepper.Step label="Approved" />
             <Stepper.Step label="Received" />
           </Stepper>
         </Group>
         <SimpleGrid cols={{ base: 2, md: 4 }} mt="lg">
-          <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Total capital required</Text><Text className="serif" fw={700} fz="xl"><Money value={plan.total_estimated} compact /></Text></Paper>
-          <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Approved</Text><Text className="serif" fw={700} fz="xl" c="teal.7"><Money value={plan.total_approved} compact /></Text></Paper>
-          <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Lines</Text><Text fw={700} fz="xl">{plan.item_count} <Text span size="xs" c="dimmed">({plan.pending_count} pending)</Text></Text></Paper>
+          <Paper p="sm" withBorder radius="md" style={{ borderColor: "var(--mantine-color-gold-5)" }}>
+            <Text size="xs" c="dimmed">{done ? "Approved spend" : "Total capital required"}</Text>
+            <Text className="serif" fw={800} fz={24}>{formatINR(done ? plan.total_approved : total, { compact: true })}</Text>
+          </Paper>
           <Paper p="sm" withBorder radius="md">
-            <Group justify="space-between" wrap="nowrap">
-              <Text size="xs" c="dimmed">By category</Text>
-              {plan.by_category.length > 0 && (
-                <DonutChart size={56} thickness={10} withTooltip valueFormatter={(v) => formatINR(v, { compact: true })}
-                  data={plan.by_category.map((b, i) => ({ name: b.category, value: b.amount_estimated, color: `${CATEGORY_COLORS[i % CATEGORY_COLORS.length]}.6` }))} />
-              )}
-            </Group>
+            <Text size="xs" c="dimmed">AI suggested</Text>
+            <Text className="serif" fw={700} fz={24} c="dimmed">{formatINR(plan.suggested_total, { compact: true })}</Text>
+          </Paper>
+          <Paper p="sm" withBorder radius="md">
+            <Text size="xs" c="dimmed">Designs to buy</Text>
+            <Text fw={700} fz={24}>{buying}<Text span size="sm" c="dimmed"> / {plan.item_count}</Text></Text>
+          </Paper>
+          <Paper p="sm" withBorder radius="md">
+            <Text size="xs" c="dimmed">Monthly budget</Text>
+            {plan.budget_limit ? (
+              <>
+                <Text fw={700} fz={24} className="serif">{formatINR(plan.budget_limit, { compact: true })}</Text>
+                <Badge size="sm" variant="light" color={overBudget ? "red" : "teal"}>
+                  {overBudget ? `Over by ${formatINR(total - plan.budget_limit, { compact: true })}` : `${formatINR(plan.budget_limit - total, { compact: true })} left`}
+                </Badge>
+              </>
+            ) : (
+              <Anchor component={Link} to="/app/settings" size="sm">No limit · set one</Anchor>
+            )}
           </Paper>
         </SimpleGrid>
         {editable ? (
-          <Textarea mt="md" label="Notes" placeholder="Add a note for the owner…" value={notes} onChange={(e) => setNotes(e.currentTarget.value)} onBlur={() => notes !== (plan.notes ?? "") && patchPlan.mutateAsync({ id: plan.id, notes }).catch(err)} autosize minRows={1} />
+          <Textarea mt="md" label="Notes" placeholder="Add a note…" value={notes} onChange={(e) => setNotes(e.currentTarget.value)} onBlur={() => notes !== (plan.notes ?? "") && patchPlan.mutateAsync({ id: plan.id, notes }).catch(err)} autosize minRows={1} />
         ) : plan.notes ? <Text mt="md" size="sm" c="dimmed">{plan.notes}</Text> : null}
       </Paper>
 
-      {plan.budget_note && (
+      {plan.budget_note && editable && (
         <Alert mb="md" color={plan.budget_note.startsWith("Fits") ? "teal" : "orange"} icon={<IconInfoCircle size={18} />}>
           {plan.budget_note}
         </Alert>
       )}
-      {!owner && editable && plan.status === "SUBMITTED" && (
-        <Alert mb="md" color="blue" icon={<IconInfoCircle size={18} />}>Waiting for owner approval. You can still adjust quantities.</Alert>
+
+      {Object.keys(cats).length > 1 && (
+        <SegmentedControl
+          mb="sm"
+          value={cat}
+          onChange={setCat}
+          data={[
+            { value: "ALL", label: `All · ${formatINR(total, { compact: true })}` },
+            ...Object.entries(cats).map(([c, v]) => ({ value: c, label: `${c} · ${formatINR(v.total, { compact: true })}` })),
+          ]}
+        />
       )}
 
       <Paper className="soft-card" radius="lg" style={{ overflow: "hidden" }} mb={100}>
         <Box style={{ overflowX: "auto" }}>
-          <Table verticalSpacing="sm" highlightOnHover miw={1000}>
+          <Table verticalSpacing="sm" highlightOnHover miw={900}>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Design</Table.Th>
-                <Table.Th>Now</Table.Th>
-                <Table.Th ta="right">Suggested</Table.Th>
-                <Table.Th>Qty</Table.Th>
-                <Table.Th ta="right">Unit cost</Table.Th>
+                <Table.Th>Stock now</Table.Th>
+                <Table.Th ta="right">AI suggests</Table.Th>
+                <Table.Th>{editable ? "Your quantity" : "Quantity"}</Table.Th>
+                <Table.Th ta="right">Cost / piece</Table.Th>
                 <Table.Th ta="right">Line total</Table.Th>
-                <Table.Th>Priority</Table.Th>
                 <Table.Th>Why</Table.Th>
-                <Table.Th>{plan.status === "DECIDED" || plan.status === "RECEIVED" ? "Received" : "Decision"}</Table.Th>
-                {plan.status === "DRAFT" && <Table.Th />}
+                {done && <Table.Th>Received</Table.Th>}
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {plan.items.map((i, idx) => (
+              {rows.map((i, idx) => (
                 <Fragment key={i.id}>
-                {(idx === 0 || plan.items[idx - 1].design.category_name !== i.design.category_name) && (
-                  <Table.Tr bg="var(--mantine-color-gold-light)">
-                    <Table.Td colSpan={plan.status === "DRAFT" ? 10 : 9}>
-                      <Group justify="space-between">
-                        <Text fw={700}>{i.design.category_name}</Text>
-                        <Text size="sm" fw={600}>
-                          {catSum[i.design.category_name]?.lines} lines · subtotal{" "}
-                          <span className="num">{formatINR(catSum[i.design.category_name]?.total ?? 0)}</span>
-                        </Text>
+                  {(idx === 0 || rows[idx - 1].design.category_name !== i.design.category_name) && (
+                    <Table.Tr bg="var(--mantine-color-gold-light)">
+                      <Table.Td colSpan={done ? 8 : 7}>
+                        <Group justify="space-between">
+                          <Text fw={700}>{i.design.category_name}</Text>
+                          <Text size="sm" fw={600}>
+                            {cats[i.design.category_name]?.buying} of {cats[i.design.category_name]?.lines} designs · subtotal{" "}
+                            <span className="num">{formatINR(cats[i.design.category_name]?.total ?? 0)}</span>
+                          </Text>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                  <Table.Tr style={q(i) === 0 ? { opacity: 0.55 } : undefined}>
+                    <Table.Td>
+                      <Group gap="sm" wrap="nowrap">
+                        <PhotoThumb url={i.design.photo_url} size={34} />
+                        <Box>
+                          <Group gap={6} wrap="nowrap">
+                            <Anchor component={Link} to={`/app/designs/${i.design.id}`}><LabelCode>{i.design.label}</LabelCode></Anchor>
+                            <Tooltip label={`${i.priority.toLowerCase()} priority`}><Badge circle size="xs" color={PRIO[i.priority]}> </Badge></Tooltip>
+                          </Group>
+                          <Text size="xs" c="dimmed" truncate maw={160}>{i.design.name ?? i.design.category_name}</Text>
+                        </Box>
                       </Group>
                     </Table.Td>
-                  </Table.Tr>
-                )}
-                <Table.Tr className={highlight.includes(i.id) ? "flash-row" : undefined} bg={i.decision === "REJECTED" ? "var(--mantine-color-red-light)" : undefined}>
-                  <Table.Td>
-                    <Group gap="sm" wrap="nowrap">
-                      <PhotoThumb url={i.design.photo_url} size={34} />
-                      <Box>
-                        <Anchor component={Link} to={`/app/designs/${i.design.id}`}><LabelCode>{i.design.label}</LabelCode></Anchor>
-                        <Text size="xs" c="dimmed" truncate maw={160}>{i.design.name ?? i.design.category_name}</Text>
-                      </Box>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" fw={600} className="num">{i.current_stock} pcs</Text>
-                    <Stack gap={3} align="flex-start"><StatusBadge status={i.status} size="xs" /><DemandBadge demand={i.demand_class} size="xs" /></Stack>
-                  </Table.Td>
-                  <Table.Td ta="right"><Text size="sm" c="dimmed" className="num">{i.suggested_qty}</Text></Table.Td>
-                  <Table.Td><QtyInput plan={plan} item={i} /></Table.Td>
-                  <Table.Td ta="right">
-                    <Tooltip label={i.formula_text} multiline w={280}>
-                      <Text size="sm" className="num" style={{ cursor: "help", textDecoration: "underline dotted" }}>{formatINR(i.expected_unit_cost)}</Text>
-                    </Tooltip>
-                  </Table.Td>
-                  <Table.Td ta="right"><Text fw={700} className="num">{formatINR(i.line_total, { compact: true })}</Text></Table.Td>
-                  <Table.Td><Badge color={PRIO[i.priority]} variant="light" size="sm">{i.priority.toLowerCase()}</Badge></Table.Td>
-                  <Table.Td maw={260}><Tooltip label={i.reason} multiline w={320} disabled={!i.reason}><Text size="xs" c="dimmed" lineClamp={2}>{i.reason}</Text></Tooltip></Table.Td>
-                  <Table.Td>
-                    {plan.status === "DECIDED" || plan.status === "RECEIVED" ? (
-                      i.decision === "APPROVED" ? <Text size="sm" className="num">{i.received_qty}/{i.final_qty}</Text> : <Badge color="red" variant="light">Rejected</Badge>
-                    ) : canDecide ? (
-                      <DecisionToggle value={i.decision} onChange={(d) => setDecision(i, d)} />
-                    ) : (
-                      <Badge color="gray" variant="light">Pending</Badge>
-                    )}
-                  </Table.Td>
-                  {plan.status === "DRAFT" && (
                     <Table.Td>
-                      <ActionIcon variant="subtle" color="gray" aria-label="Remove line" onClick={() => removeItem.mutateAsync({ planId: plan.id, itemId: i.id }).catch(err)}>
-                        <IconTrash size={14} />
-                      </ActionIcon>
+                      <Text size="sm" fw={600} className="num">{i.current_stock} pcs</Text>
+                      <Stack gap={3} align="flex-start"><StatusBadge status={i.status} size="xs" /><DemandBadge demand={i.demand_class} size="xs" /></Stack>
                     </Table.Td>
-                  )}
-                </Table.Tr>
+                    <Table.Td ta="right"><Text size="sm" c="dimmed" className="num">{i.suggested_qty}</Text></Table.Td>
+                    <Table.Td>
+                      {editable ? (
+                        <QtyInput plan={plan} item={i} value={q(i)} onLocal={(n) => setLocal((m) => ({ ...m, [i.id]: n }))} />
+                      ) : q(i) === 0 || i.decision === "REJECTED" ? (
+                        <Badge color="gray" variant="light">Not bought</Badge>
+                      ) : (
+                        <Text fw={700} className="num">{i.final_qty}</Text>
+                      )}
+                      {editable && q(i) === 0 && <Text size="xs" c="dimmed">not buying</Text>}
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Tooltip label={i.formula_text} multiline w={280}>
+                        <Text size="sm" className="num" style={{ cursor: "help", textDecoration: "underline dotted" }}>{formatINR(i.expected_unit_cost)}</Text>
+                      </Tooltip>
+                    </Table.Td>
+                    <Table.Td ta="right"><Text fw={700} className="num">{formatINR(lineTotal(i), { compact: true })}</Text></Table.Td>
+                    <Table.Td maw={280}><Tooltip label={i.reason} multiline w={320} disabled={!i.reason}><Text size="xs" c="dimmed" lineClamp={2}>{i.reason}</Text></Tooltip></Table.Td>
+                    {done && (
+                      <Table.Td>{i.decision === "APPROVED" ? <Text size="sm" className="num">{i.received_qty}/{i.final_qty}</Text> : null}</Table.Td>
+                    )}
+                  </Table.Tr>
                 </Fragment>
               ))}
             </Table.Tbody>
@@ -351,22 +373,17 @@ export default function PlanDetailPage() {
         <Box p="lg" style={{ borderTop: "2px solid var(--mantine-color-gold-5)" }}>
           <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">
             <Stack gap={4}>
-              {Object.entries(catSum).map(([c, v]) => (
+              {Object.entries(cats).map(([c, v]) => (
                 <Group key={c} gap="xl" justify="space-between" miw={320}>
-                  <Text size="sm" c="dimmed">{c} ({v.lines} lines)</Text>
+                  <Text size="sm" c="dimmed">{c} ({v.buying} designs)</Text>
                   <Text size="sm" className="num">{formatINR(v.total)}</Text>
                 </Group>
               ))}
             </Stack>
             <Box ta="right">
-              <Text size="sm" c="dimmed">{plan.scope === "ALL" ? "Total capital required for this month" : `Capital required for ${plan.category_name ?? "this category"}`}</Text>
-              <Text className="serif" fw={800} fz={34} lh={1.1}>{formatINR(plan.total_capital_required)}</Text>
-              <Text size="xs" c="dimmed">{formatINR(plan.total_capital_required, { compact: true })} · {plan.item_count} designs · approved so far {formatINR(plan.total_approved, { compact: true })}</Text>
-              {plan.budget_limit ? (
-                <Badge mt={6} color={plan.within_budget ? "teal" : "red"} variant="light">
-                  {plan.within_budget ? "Within" : "Over"} your monthly budget of {formatINR(plan.budget_limit, { compact: true })}
-                </Badge>
-              ) : null}
+              <Text size="sm" c="dimmed">Total capital required</Text>
+              <Text className="serif" fw={800} fz={34} lh={1.1}>{formatINR(total)}</Text>
+              <Text size="xs" c="dimmed">AI suggested {formatINR(plan.suggested_total, { compact: true })} · {buying} designs to buy</Text>
             </Box>
           </Group>
         </Box>
@@ -381,28 +398,31 @@ export default function PlanDetailPage() {
       >
         <Group justify="space-between" wrap="wrap" gap="xs" px={{ base: 0, sm: "md" }}>
           <Group gap="lg">
-            <Text size="sm">Approved <b className="num">{formatINR(sums.approved, { compact: true })}</b></Text>
-            <Text size="sm" c="dimmed">Pending <b className="num">{formatINR(sums.pending, { compact: true })}</b></Text>
-            {sums.rejected > 0 && <Text size="sm" c="red">Rejected <b className="num">{formatINR(sums.rejected, { compact: true })}</b></Text>}
+            <Text size="sm">Total <b className="num" style={{ fontSize: 18 }}>{formatINR(done ? plan.total_approved : total, { compact: true })}</b></Text>
+            {plan.budget_limit ? (
+              <Text size="sm" c={overBudget ? "red" : "teal"}>{overBudget ? "over" : "within"} budget {formatINR(plan.budget_limit, { compact: true })}</Text>
+            ) : null}
           </Group>
           <Group gap="xs">
             <Tooltip label="Export to Excel"><ActionIcon variant="default" size="lg" aria-label="Export" onClick={() => download(`/purchase-plans/${plan.id}/export`)}><IconDownload size={16} /></ActionIcon></Tooltip>
             <Tooltip label="Print"><ActionIcon variant="default" size="lg" aria-label="Print" onClick={() => window.print()}><IconPrinter size={16} /></ActionIcon></Tooltip>
-            {plan.status === "DRAFT" && (
-              <Button variant="subtle" color="red" onClick={() => modals.openConfirmModal({ title: "Delete this draft?", labels: { confirm: "Delete", cancel: "Cancel" }, confirmProps: { color: "red" }, onConfirm: () => del.mutateAsync(plan.id).then(() => navigate("/app/purchase-plans")).catch(err) })}>
-                Delete
-              </Button>
+            {(editable || (plan.status === "DECIDED" && !plan.items.some((i) => i.received_qty > 0))) && (
+              <Button variant="subtle" color="red" onClick={removePlan}>{done ? "Cancel plan" : "Delete"}</Button>
+            )}
+            {editable && (
+              <Tooltip label="Recalculate from today's stock and sales. Quantities you changed are kept." multiline w={260}>
+                <Button variant="default" leftSection={<IconRefresh size={16} />} onClick={refreshPlan} loading={refresh.isPending}>Refresh suggestions</Button>
+              </Tooltip>
             )}
             {plan.status === "DRAFT" && !owner && (
               <Button leftSection={<IconSend size={16} />} onClick={() => submit.mutateAsync(plan.id).then(() => notifications.show({ color: "teal", message: "Sent to the owner for approval" })).catch(err)} loading={submit.isPending}>
-                Submit for approval
+                Send to owner
               </Button>
             )}
-            {canDecide && (
-              <>
-                <Button variant="default" onClick={saveDecisions} loading={decide.isPending}>Save decisions</Button>
-                <Button color="teal" leftSection={<IconCheck size={16} />} onClick={approveAll} loading={decide.isPending}>Approve all</Button>
-              </>
+            {owner && editable && (
+              <Button color="teal" leftSection={<IconCheck size={16} />} onClick={approve} loading={decide.isPending}>
+                Approve plan · {formatINR(total, { compact: true })}
+              </Button>
             )}
             {plan.status === "DECIDED" && plan.approved_count > 0 && (
               <Button leftSection={<IconTruckDelivery size={16} />} onClick={openRecv}>Mark as received</Button>

@@ -245,19 +245,9 @@ function usePlanMutation<TVars>(fn: (v: TVars) => Promise<PlanDetail>) {
     },
   });
 }
+/** Create this month's plan, or refresh the one open plan (keeps quantities a person changed). */
 export const useCreatePlan = () =>
-  usePlanMutation((b: { title?: string; category_id?: number }) =>
-    api<PlanDetail>("/purchase-plans", { method: "POST", body: { from_baseline: true, ...b } }));
-export function useCreatePlansByCategory() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api<PlanSummary[]>("/purchase-plans/by-category", { method: "POST" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["plans"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-  });
-}
+  usePlanMutation(() => api<PlanDetail>("/purchase-plans", { method: "POST", body: { from_baseline: true } }));
 export const usePatchPlan = () =>
   usePlanMutation(({ id, ...b }: { id: number; title?: string; notes?: string }) =>
     api<PlanDetail>(`/purchase-plans/${id}`, { method: "PATCH", body: b }));
@@ -273,7 +263,7 @@ export const useRemovePlanItem = () =>
 export const useSubmitPlan = () =>
   usePlanMutation((id: number) => api<PlanDetail>(`/purchase-plans/${id}/submit`, { method: "POST" }));
 export const useDecidePlan = () =>
-  usePlanMutation(({ id, ...b }: { id: number; approve_all?: boolean; decisions?: { item_id: number; decision: string }[] }) =>
+  usePlanMutation(({ id, ...b }: { id: number; approve_all?: boolean; decisions?: { item_id: number; decision?: string; final_qty?: number }[] }) =>
     api<PlanDetail>(`/purchase-plans/${id}/decide`, { method: "POST", body: b }));
 export function useReceivePlan() {
   const qc = useQueryClient();
@@ -287,7 +277,11 @@ export function useDeletePlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api<void>(`/purchase-plans/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["plans"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plans"] });
+      qc.invalidateQueries({ queryKey: ["reorder"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 

@@ -18,9 +18,7 @@ router = APIRouter(prefix="/purchase-plans", tags=["purchase-plans"])
 
 
 class PlanCreate(In):
-    title: str | None = Field(default=None, max_length=120)
     from_baseline: bool = True
-    category_id: int | None = None
 
 
 class PlanPatch(In):
@@ -68,14 +66,9 @@ def list_plans(status: str | None = None, db: Session = Depends(get_db), _: User
 
 
 @router.post("", status_code=201)
-def create_plan(body: PlanCreate, db: Session = Depends(get_db), user: User = CurrentUser):
-    return svc.create_from_baseline(db, user, body.title, body.category_id)
-
-
-@router.post("/by-category", status_code=201)
-def create_by_category(db: Session = Depends(get_db), user: User = CurrentUser):
-    """One draft plan per category that needs restocking."""
-    return svc.create_per_category(db, user)
+def create_plan(body: PlanCreate | None = None, db: Session = Depends(get_db), user: User = CurrentUser):
+    """Create this month's plan, or refresh the one open plan (keeps every quantity a person changed)."""
+    return svc.create_or_refresh(db, user)
 
 
 @router.get("/{plan_id}")

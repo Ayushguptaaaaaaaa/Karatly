@@ -459,6 +459,8 @@ export default function InsightsPage() {
   const { data: running, refetch: refetchRunning } = useRunningInsights();
   const start = useStartInsights();
   const setSeen = useUi((s) => s.setInsightsSeen);
+  const chatMinimized = useUi((s) => s.chatMinimized);
+  const setChatMinimized = useUi((s) => s.setChatMinimized);
   const run = runParam ? runQ.data : latestQ.data;
   const [jobId, setJobId] = useState<string | null>(null);
   const activeJob = jobId ?? running?.id ?? null;
@@ -562,6 +564,19 @@ export default function InsightsPage() {
     );
   } else body = <ReportView run={run} />;
 
+  if (isWide && chatMinimized) {
+    return (
+      <>
+        {header}
+        {body}
+        <Affix position={{ bottom: 24, right: 24 }} className="no-print">
+          <Button radius="xl" size="md" leftSection={<IconMessageChatbot size={20} />} onClick={() => setChatMinimized(false)} variant="gradient" gradient={{ from: "gold.5", to: "gold.8" }} style={{ boxShadow: "0 8px 24px rgba(157,122,24,.35)" }}>
+            Ask AI
+          </Button>
+        </Affix>
+      </>
+    );
+  }
   if (isWide) {
     return (
       <>
@@ -570,7 +585,7 @@ export default function InsightsPage() {
           <Grid.Col span={8}>{body}</Grid.Col>
           <Grid.Col span={4}>
             <Box style={{ position: "sticky", top: 80 }}>
-              <ChatPanel height="calc(100vh - 96px)" />
+              <ChatPanel height="calc(100vh - 96px)" onMinimize={() => setChatMinimized(true)} />
             </Box>
           </Grid.Col>
         </Grid>

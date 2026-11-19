@@ -47,6 +47,42 @@ def create_all():
     engine = get_engine()
     Base.metadata.create_all(engine)
     _add_missing_columns(engine)
+    _run_data_steps(engine)
+
+
+SCHEMA_VERSION = 2
+
+
+def _run_data_steps(engine) -> None:
+    """One-time data steps, tracked with SQLite's user_version."""
+    from sqlalchemy import text
+
+    if engine.dialect.name != "sqlite":
+        return
+    with engine.connect() as conn:
+        version = conn.execute(text("PRAGMA user_version")).scalar() or 0
+    if version < 2:
+        _tidy_old_plans(engine)
+    if version < SCHEMA_VERSION:
+        with engine.begin() as conn:
+            conn.execute(text(f"PRAGMA user_version = {SCHEMA_VERSION}"))
+
+
+def _tidy_old_plans(engine) -> None:
+    """One-time step when moving to 'one open plan': remove old drafts nobody touched
+    (duplicates and per-category plans). Drafts with a changed quantity or decision, plans sent
+    to the owner, and approved plans are kept."""
+    from sqlalchemy import text
+
+    untouched = """SELECT p.id FROM purchase_plans p
+        WHERE p.status = 'DRAFT' AND (p.source = 'AI' OR p.notes IS NULL OR p.notes = '')
+          AND NOT EXISTS (SELECT 1 FROM purchase_plan_items i WHERE i.plan_id = p.id
+                          AND (i.final_qty != i.suggested_qty OR i.decision != 'PENDING'))"""
+    with engine.begin() as conn:
+        ids = [r[0] for r in conn.execute(text(untouched))]
+        for pid in ids:
+            conn.execute(text("DELETE FROM purchase_plan_items WHERE plan_id = :p"), {"p": pid})
+            conn.execute(text("DELETE FROM purchase_plans WHERE id = :p"), {"p": pid})
 
 
 def _add_missing_columns(engine) -> None:
@@ -67,6 +103,7 @@ def _add_missing_columns(engine) -> None:
                 if col.server_default is not None:
                     default = f" DEFAULT '{col.server_default.arg}'"
                 conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl_type}{default}'))
+
 
 
 def get_db() -> Iterator[Session]:

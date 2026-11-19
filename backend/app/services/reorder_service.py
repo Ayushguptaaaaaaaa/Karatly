@@ -6,7 +6,7 @@ Quantity rules (built to be sensible for a small retailer and a large showroom a
 2. Target stock = rate × cover months + minimum stock.
 3. Cap: never restock above `max_stock_multiple` × the most stock this design has ever held
    (a design you usually keep 10 of will not get an order for 100).
-4. Quantity = target − stock on hand.
+4. Quantity = target − stock on hand − pieces already on order (approved plans not yet received).
 5. Optional monthly purchase budget: high-priority lines are funded first, then medium, then low;
    lines that don't fit are reduced or skipped (see `fit_to_budget`).
 """
@@ -40,12 +40,27 @@ def peak_stock_map(db: Session) -> dict[int, int]:
     return peak
 
 
+def on_order_map(db: Session) -> dict[int, int]:
+    """Pieces approved in a purchase plan but not received yet, per design."""
+    from app.models import PurchasePlan, PurchasePlanItem
+    from app.models.enums import Decision, PlanStatus
+
+    rows = (db.query(PurchasePlanItem.design_id, PurchasePlanItem.final_qty, PurchasePlanItem.received_qty)
+            .join(PurchasePlan, PurchasePlan.id == PurchasePlanItem.plan_id)
+            .filter(PurchasePlan.status == PlanStatus.DECIDED, PurchasePlanItem.decision == Decision.APPROVED).all())
+    out: dict[int, int] = defaultdict(int)
+    for did, fq, rq in rows:
+        out[did] += max(int(fq) - int(rq), 0)
+    return out
+
+
 def baseline(db: Session, category_id: int | None = None, snap: metrics_service.Snapshot | None = None) -> dict:
     snap = snap or metrics_service.snapshot(db)
     cover = float(settings_service.get(db, "reorder_cover_months") or 1.5)
     multiple = float(settings_service.get(db, "max_stock_multiple") or 1.5)
     infl_global = settings_service.get(db, "inflation_pct_global")
     peaks = peak_stock_map(db)
+    on_order = on_order_map(db)
     items = []
     for d in snap.designs.values():
         if not d.is_active or (category_id and d.category_id != category_id):
@@ -59,8 +74,9 @@ def baseline(db: Session, category_id: int | None = None, snap: metrics_service.
         usual = max(peaks.get(d.id, 0), d.min_stock)
         cap = max(d.min_stock + 1, math.ceil(usual * multiple))
         target = min(wanted, cap)
-        qty = max(target - st.current_stock, 0)
-        if qty == 0 and st.status == StockStatus.OUT:
+        ordered = on_order.get(d.id, 0)
+        qty = max(target - st.current_stock - ordered, 0)
+        if qty == 0 and st.status == StockStatus.OUT and not ordered:
             qty = max(d.min_stock, 1)
         if qty == 0:
             continue
@@ -79,6 +95,8 @@ def baseline(db: Session, category_id: int | None = None, snap: metrics_service.
         reason = f"{status_txt}; {demand_txt}, {pace}. Target {cover:g} months cover + min {d.min_stock}"
         reason += (f", capped at {cap} ({multiple:g}× your usual stock of {usual})." if wanted > cap
                    else f" = {target} pieces.")
+        if ordered:
+            reason += f" {ordered} already on order."
         infl = costing_service.resolve_inflation(d, d.category, infl_global)
         cost = costing_service.line(st.last_unit_cost, infl, qty)
         items.append({
@@ -87,7 +105,8 @@ def baseline(db: Session, category_id: int | None = None, snap: metrics_service.
             "current_stock": st.current_stock,
             "min_stock": d.min_stock,
             "usual_stock": usual,
-            "max_qty": max(cap - st.current_stock, qty),
+            "max_qty": max(cap - st.current_stock - ordered, qty),
+            "on_order": ordered,
             "status": st.status.value,
             "demand_class": st.demand.value,
             "velocity_30d": st.velocity_30d,

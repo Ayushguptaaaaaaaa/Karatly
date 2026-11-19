@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, JSON, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -85,6 +85,8 @@ class PurchasePlanItem(Base):
     decision: Mapped[Decision] = mapped_column(enum_col(Decision), default=Decision.PENDING)
     decision_note: Mapped[str | None] = mapped_column(String(300), nullable=True)
     received_qty: Mapped[int] = mapped_column(Integer, default=0)
+    # True once a person changed the quantity: refreshing suggestions never overwrites it
+    edited: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     plan: Mapped[PurchasePlan] = relationship(back_populates="items")
     design: Mapped[Design] = relationship()
