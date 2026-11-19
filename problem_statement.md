@@ -1,5 +1,5 @@
 # Problem Statement
-### AI Accountant & Inventory Management System for Jewelers
+### Kraftly — AI Accountant & Inventory Management System for Jewelers
 
 ---
 

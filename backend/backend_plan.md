@@ -1,4 +1,4 @@
-# Backend Plan: Jeweler AI Accountant (POC)
+# Backend Plan: Kraftly — AI Accountant for Jewellers (POC)
 
 > **Audience:** the engineer or AI model implementing the backend. Follow this document **exactly and in order**.
 > **Related docs:** `../problem_statement.md`, `../solution.md`, `../architecture.md` (high level), `../frontend/frontend_plan.md` (the UI that consumes this API).
@@ -186,7 +186,7 @@ backend/
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| APP_NAME | str | "Jeweler AI Accountant" | |
+| APP_NAME | str | "Kraftly" | |
 | APP_ENV | str | "development" | |
 | LOG_LEVEL | str | "INFO" | |
 | API_HOST / API_PORT | str / int | 127.0.0.1 / 8000 | |

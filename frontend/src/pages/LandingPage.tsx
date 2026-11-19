@@ -29,9 +29,14 @@ export function BrandPanel({ slim = false }: { slim?: boolean }) {
         <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }}>
           <Group gap="md" wrap="nowrap">
             <img src="/gem.svg" alt="" width={56} height={56} />
-            <Title order={1} className="gold-text" fz={{ base: 32, sm: 44 }} lh={1.1}>
-              Jeweler AI Accountant
-            </Title>
+            <Box>
+              <Title order={1} className="gold-text" fz={{ base: 40, sm: 56 }} lh={1}>
+                Kraftly
+              </Title>
+              <Text size="sm" tt="uppercase" fw={600} c="rgba(243,239,230,.65)" style={{ letterSpacing: 3 }}>
+                AI accountant for jewellers
+              </Text>
+            </Box>
           </Group>
           <Text mt="md" fz={{ base: "md", sm: "lg" }} c="rgba(243,239,230,.8)">
             Your AI accountant &amp; inventory partner for jewellery.

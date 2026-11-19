@@ -32,6 +32,7 @@ function Pill({ children, onClick }: { children: string; onClick: () => void }) 
 function modelLabel(m?: string) {
   if (!m) return "";
   if (m === "rule-based") return "Automatic";
+  if (m === "instant") return "⚡ Instant · from your data";
   return m.replace("gemini/", "").replace(/-/g, " ").replace("gemini", "Gemini");
 }
 
@@ -78,7 +79,9 @@ function AnswerTable({ table }: { table: NonNullable<ChatMessage["payload"]["tab
 }
 
 function PendingBubble({ jobId }: { jobId: string }) {
-  const p = useJobEvents(jobId);
+  const qc = useQueryClient();
+  // the moment the answer is ready, reload the conversation (no waiting for polling)
+  const p = useJobEvents(jobId, () => qc.invalidateQueries({ queryKey: ["chatSession"] }));
   const waiting = p.steps.find((s) => s.key === "think")?.note;
   return (
     <Group gap="sm" align="flex-start" wrap="nowrap">
@@ -128,6 +131,7 @@ function Bubble({ m, onAsk }: { m: ChatMessage; onAsk: (q: string) => void }) {
             <Text size="10px" c="dimmed">
               {formatRelative(m.created_at)}
               {m.payload.model_used ? ` · ${modelLabel(m.payload.model_used)}` : ""}
+              {m.payload.seconds !== undefined ? ` · ${m.payload.seconds}s` : ""}
             </Text>
             <CopyButton value={m.content}>
               {({ copied, copy }) => (

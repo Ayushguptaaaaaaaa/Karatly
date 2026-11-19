@@ -70,6 +70,8 @@ def run_crew_step(
     output_models: list[type[BaseModel]],
     fallback: Callable[[], list[BaseModel]],
     task_callback: Callable[[str], None] | None = None,
+    kinds: list[str] | None = None,
+    retries: int = 2,
 ) -> tuple[list[BaseModel], str]:
     """Run a crew whose tasks produce `output_models` (in order). Returns (outputs, model_used)."""
     for k in step_keys[:1]:
@@ -82,11 +84,11 @@ def run_crew_step(
                 job_service.update_step(job_id, k, "DONE", model_used=model_used, note=note)
         return outputs, model_used
 
-    for kind in model_manager.usable_kinds():
+    for kind in (kinds if kinds is not None else model_manager.usable_kinds()):
         if not model_manager.available(kind):
             continue
         model_name = model_manager.model_name(kind)
-        for attempt in range(2):
+        for attempt in range(max(1, retries)):
             t0 = time.time()
             try:
                 crew_obj = build_crew(model_manager.get_llm(kind), step_callback_for(job_id), task_callback)
@@ -97,12 +99,12 @@ def run_crew_step(
                 return finish(outputs, model_name)
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 log.warning("AI step %s parse problem (%s attempt %d): %s", step_keys, model_name, attempt + 1, e)
-                if attempt == 0:
+                if attempt < retries - 1:
                     continue
                 break
             except Exception as e:  # noqa: BLE001
                 cls = model_manager.report_failure(kind, e)
-                if cls in ("quota", "quota_daily", "overload", "auth") or attempt == 1:
+                if cls in ("quota", "quota_daily", "overload", "auth") or attempt >= retries - 1:
                     break
     outputs = fallback()
     return finish(outputs, "rule-based", "Automatic (AI unavailable)")

@@ -76,56 +76,77 @@ def post_message(db: Session, user: User, session_id: int, text: str) -> dict:
 
 
 def shop_snapshot(db: Session) -> dict:
-    ov = dashboard_service.overview(db, period_service.resolve(db, "month"))
+    """Everything a typical question needs, pre-computed so the chat model rarely has to call tools."""
+    from app.services import profit_service, reorder_service, report_service
+
+    month = period_service.resolve(db, "month")
+    day = period_service.resolve(db, "day")
+    ov = dashboard_service.overview(db, month)
     latest = ov.get("latest_ai")
     k = {key: (float(v) if hasattr(v, "quantize") else v) for key, v in ov["kpis"].items()}
+    today_p = profit_service.profitability(db, day, "design", limit=10)
+    cat_p = profit_service.profitability(db, month, "category")
+    sub_p = profit_service.profitability(db, month, "subcategory", limit=15)
+    des_p = profit_service.profitability(db, month, "design", limit=10)
+    base = reorder_service.baseline(db)
+    dead = report_service.dead_stock(db)
+    pick = ("name", "category", "units_sold", "units_returned", "net_revenue", "cogs", "net_profit", "margin_pct")
+
+    def rows(rep):
+        return [{f: r.get(f) for f in pick if f in r} for r in rep["rows"]]
+
     return {
-        "shop": settings_service.get(db, "shop_name"), "month": ov["period"]["label"], "kpis": k,
+        "shop": settings_service.get(db, "shop_name"),
+        "today": {"date": day.label, "totals": today_p["totals"], "designs_sold_today": rows(today_p)},
+        "this_month": {"period": month.label, "kpis": k, "profit_by_category": rows(cat_p),
+                       "profit_by_subcategory": rows(sub_p), "top_designs_by_profit": rows(des_p),
+                       "top_sellers": [{"label": t["label"], "sold": t["sold_units"], "sales_value": t["sales_value"]}
+                                       for t in ov["top_sellers"]]},
         "stock_health": ov["stock_health"],
-        "top_sellers_this_month": [{"label": t["label"], "sold": t["sold_units"]} for t in ov["top_sellers"]],
-        "alerts": [{"label": a["label"], "status": a["status"], "stock": a["current_stock"], "demand": a["demand_class"]}
-                   for a in ov["alerts"]],
-        "categories": [{"name": c["name"], "pieces": c["pieces"], "sold_this_month": c["sold_units"]}
+        "sold_out_and_low": [{"label": a["label"], "category": a["category_name"], "status": a["status"],
+                              "stock": a["current_stock"], "demand": a["demand_class"], "sold_30d": a["sold_last_30d"]}
+                             for a in ov["alerts"]],
+        "restock_suggestion": {"total_budget": float(base["total_estimated"]), "by_category": base["by_category"],
+                               "lines": [{"label": i["design"]["label"], "qty": i["suggested_qty"],
+                                          "priority": i["priority"], "line_total": float(i["line_total"])}
+                                         for i in base["items"][:12]]},
+        "dead_stock": {"total_value": dead["total_value"], "not_selling_days": dead["dead_stock_days"],
+                       "designs": [{"label": r["design"]["label"], "stock": r["current_stock"],
+                                    "days_since_sale": r["days_since_last_sale"], "value": r["value_tied_up"]}
+                                   for r in dead["items"][:10]]},
+        "sales_trend_6_months": [{"month": t["label"], "units": t["units"], "value": t["value"]} for t in ov["sales_trend"]],
+        "categories": [{"name": c["name"], "pieces_in_stock": c["pieces"], "sold_this_month": c["sold_units"]}
                        for c in ov["category_breakdown"]],
         "latest_insights_headline": latest["headline"] if latest else None,
     }
 
 
 def _answer(job_id: str, msg_id: int, user_id: int, role: str, question: str, history: list[str]) -> None:
-    from app.ai import fallbacks
-    from app.ai.crews.assistant_crew.crew import AssistantCrew
-    from app.ai.llm import AI_LOCK, model_manager
-    from app.ai.outputs import ChatAnswer
-    from app.ai.runner import run_crew_step
+    """Never waits for the insights report (no shared AI lock).
+    1. Common questions -> instant answer from exact data (well under a second).
+    2. Everything else -> fast chat model with the snapshot in the prompt (usually one LLM call).
+    3. AI busy / over quota -> instant answer or a quick summary instead of an error."""
+    import time
 
-    if not AI_LOCK.acquire(blocking=False):
-        job_service.update_step(job_id, "think", "RUNNING", note="Waiting for the AI to finish the insights report…")
-        AI_LOCK.acquire()
+    from app.ai import instant_answers
+    from app.ai.llm import model_manager
+    from app.core.config import get_settings
+
+    t0 = time.time()
     try:
         job_service.start(job_id)
-        job_service.update_step(job_id, "think", "DONE")
         with SessionLocal() as db:
             snap = shop_snapshot(db)
-        model_manager.count("chat")
-        outs, model = run_crew_step(
-            job_id=job_id, step_keys=["answer"],
-            build_crew=lambda llm, sc, tc: AssistantCrew(llm, sc, tc),
-            inputs={"shop_name": snap["shop"], "user_role": "owner" if role == "OWNER" else "admin",
-                    "today": str(_today()), "shop_snapshot": json.dumps(snap, default=str, ensure_ascii=False),
-                    "chat_history": "\n".join(history) or "(none)", "question": question},
-            output_models=[ChatAnswer],
-            fallback=lambda: [fallbacks.chat_answer(snap, question)],
-        )
-        ans: ChatAnswer = outs[0]
-        with SessionLocal() as db:
-            m = db.get(ChatMessage, msg_id)
-            m.content = ans.answer_markdown
-            m.payload = {"table": ans.table.model_dump() if ans.table else None,
-                         "chart": ans.chart.model_dump() if ans.chart else None,
-                         "follow_up_questions": ans.follow_up_questions[:3], "model_used": model}
-            m.status = MessageStatus.COMPLETE
-            db.commit()
-        job_service.finish(job_id, "chat_message", msg_id, JobType.CHAT_ANSWER.value)
+        job_service.update_step(job_id, "think", "DONE")
+        quick = instant_answers.answer(question, snap) if get_settings().CHAT_INSTANT_ANSWERS else None
+        if quick is not None:
+            ans, model = quick, "instant"
+            job_service.update_step(job_id, "answer", "DONE", model_used="instant")
+        else:
+            model_manager.count("chat")
+            outs, model = _ai_answer(job_id, role, question, history, snap)
+            ans = outs[0]
+        _save_answer(job_id, msg_id, ans, model, t0)
     except Exception as e:  # noqa: BLE001
         log.exception("Chat answer failed")
         with SessionLocal() as db:
@@ -135,8 +156,43 @@ def _answer(job_id: str, msg_id: int, user_id: int, role: str, question: str, hi
                 m.content = "I couldn't answer that right now."
                 db.commit()
         job_service.fail(job_id, str(e)[:200], JobType.CHAT_ANSWER.value)
-    finally:
-        AI_LOCK.release()
+
+
+def _ai_answer(job_id: str, role: str, question: str, history: list[str], snap: dict):
+    from app.ai import instant_answers
+    from app.ai.crews.assistant_crew.crew import AssistantCrew
+    from app.ai.llm import model_manager
+    from app.ai.outputs import ChatAnswer
+    from app.ai.runner import run_crew_step
+
+    return run_crew_step(
+        job_id=job_id, step_keys=["answer"],
+        build_crew=lambda llm, sc, tc: AssistantCrew(llm, sc, tc),
+        inputs={"shop_name": snap["shop"], "user_role": "owner" if role == "OWNER" else "admin",
+                "today": str(_today()),
+                "shop_snapshot": json.dumps(snap, default=str, ensure_ascii=False, separators=(",", ":")),
+                "chat_history": "\n".join(history) or "(none)", "question": question},
+        output_models=[ChatAnswer],
+        fallback=lambda: [instant_answers.answer(question, snap, strict=False)],
+        kinds=model_manager.chat_kinds(),
+        retries=1,
+    )
+
+
+def _save_answer(job_id: str, msg_id: int, ans, model: str, t0: float) -> None:
+    import time
+
+    with SessionLocal() as db:
+        m = db.get(ChatMessage, msg_id)
+        m.content = ans.answer_markdown
+        m.payload = {"table": ans.table.model_dump() if ans.table else None,
+                     "chart": ans.chart.model_dump() if ans.chart else None,
+                     "follow_up_questions": ans.follow_up_questions[:3], "model_used": model,
+                     "seconds": round(time.time() - t0, 1)}
+        m.status = MessageStatus.COMPLETE
+        db.commit()
+    log.info("Chat answered in %.1fs with %s", time.time() - t0, model)
+    job_service.finish(job_id, "chat_message", msg_id, JobType.CHAT_ANSWER.value)
 
 
 def suggestions(db: Session, user: User) -> list[str]:

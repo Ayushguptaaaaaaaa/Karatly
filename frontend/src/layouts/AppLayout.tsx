@@ -87,7 +87,7 @@ function Logo({ collapsed }: { collapsed?: boolean }) {
             {data?.shop_name ?? "Jeweler"}
           </Text>
           <Text size="xs" c="dimmed">
-            AI Accountant
+            Kraftly · AI Accountant
           </Text>
         </Box>
       )}

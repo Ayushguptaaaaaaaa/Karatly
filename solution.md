@@ -1,5 +1,5 @@
 # Solution
-### AI Accountant & Inventory Management System for Jewelers
+### Kraftly — AI Accountant & Inventory Management System for Jewelers
 
 > This document describes **what** the application does and **how** it helps the jeweler.
 > Frameworks, languages and other technical choices will be decided separately.

@@ -1,4 +1,4 @@
-# Jeweler AI Accountant: Backend (POC)
+# Kraftly: Backend (POC)
 
 FastAPI + SQLAlchemy (SQLite) + CrewAI (Gemini free tier). The full design is in [backend_plan.md](backend_plan.md).
 

@@ -1,5 +1,5 @@
 # Architecture
-### AI Accountant & Inventory Management System for Jewelers (POC)
+### Kraftly — AI Accountant & Inventory Management System for Jewelers (POC)
 
 > **Implementation detail now lives in [backend/backend_plan.md](backend/backend_plan.md) and [frontend/frontend_plan.md](frontend/frontend_plan.md); where they differ from this file, the plans win.** Main updates: Owner/Admin username-password logins, subcategories, the shop starts blank, a live dashboard over SSE, `mantine-datatable` instead of Mantine React Table, and month/quarter periods computed on the fly (Indian financial-year quarters).
 >

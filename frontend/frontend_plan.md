@@ -1,4 +1,4 @@
-# Frontend Plan: Jeweler AI Accountant (POC)
+# Frontend Plan: Kraftly — AI Accountant for Jewellers (POC)
 
 > **Audience:** the engineer or AI model implementing the frontend. Follow this document **exactly and in order**.
 > **API source of truth:** `../backend/backend_plan.md` Section 8 (endpoints, JSON fields, enums). Never invent endpoints or field names. If something is missing, add it to the backend plan first.
@@ -58,7 +58,7 @@
 ```
 VITE_API_BASE_URL=/api/v1
 VITE_SHOW_DEMO_HINT=true
-VITE_APP_NAME=Jeweler AI Accountant
+VITE_APP_NAME=Kraftly
 ```
 
 `vite.config.ts` dev proxy:
@@ -130,7 +130,7 @@ Light by default. A toggle in the header (sun/moon) uses Mantine `useMantineColo
 ```
 frontend/
 ├── frontend_plan.md
-├── index.html                    # title "Jeweler AI Accountant", favicon gem icon (SVG)
+├── index.html                    # title "Kraftly", favicon gem icon (SVG)
 ├── package.json  tsconfig.json  tsconfig.node.json  vite.config.ts
 ├── postcss.config.cjs            # postcss-preset-mantine + simple-vars breakpoints
 ├── .env  .env.example

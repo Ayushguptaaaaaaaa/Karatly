@@ -133,7 +133,7 @@ export default function SettingsPage() {
                   )}
                 </Stack>
               </SectionCard>
-              <Text size="xs" c="dimmed">Jeweler AI Accountant · Demo / POC version 0.1</Text>
+              <Text size="xs" c="dimmed">Kraftly · Demo / POC version 0.1</Text>
             </Stack>
           </Grid.Col>
         </Grid>

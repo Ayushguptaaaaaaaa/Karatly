@@ -40,22 +40,25 @@ class CrewHelpers:
     def crew_dir(self) -> Path:
         return Path(inspect.getfile(type(self))).parent
 
-    def make_agent(self, name: str, skills: list[str], tools: list, max_iter: int | None = None) -> Agent:
+    rpm_override: int | None = None
+
+    def make_agent(self, name: str, skills: list[str], tools: list, max_iter: int | None = None,
+                   **extra) -> Agent:
         s = get_settings()
         cfg = dict(self.agents_config[name])  # type: ignore[attr-defined]
         skill_text = load_skills(self.crew_dir, skills)
         if skill_text:
             cfg["backstory"] = f"{cfg.get('backstory', '').strip()}\n\n{skill_text}"
         return Agent(config=cfg, tools=tools, llm=self.llm, max_iter=max_iter or s.AGENT_MAX_ITER,
-                     allow_delegation=False, verbose=False, max_rpm=s.LLM_MAX_RPM)
+                     allow_delegation=False, verbose=False, max_rpm=self.rpm_override or s.LLM_MAX_RPM, **extra)
 
     def make_crew(self, agents, tasks) -> Crew:
         s = get_settings()
         kw = {}
         if self._step_callback:
             kw["step_callback"] = self._step_callback
-        return Crew(agents=agents, tasks=tasks, process=Process.sequential, verbose=False, max_rpm=s.LLM_MAX_RPM,
-                    **kw)
+        return Crew(agents=agents, tasks=tasks, process=Process.sequential, verbose=False,
+                    max_rpm=self.rpm_override or s.LLM_MAX_RPM, **kw)
 
     def task_done(self, key: str):
         def _cb(_output):

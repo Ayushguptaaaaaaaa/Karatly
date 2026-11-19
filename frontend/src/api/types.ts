@@ -175,7 +175,7 @@ export interface ChatMessage {
   payload: {
     table?: { columns: string[]; rows: (string | number | null)[][] } | null;
     chart?: { type: "bar" | "line" | "pie"; title: string; data: { label: string; value: number }[]; value_format: "number" | "inr" } | null;
-    follow_up_questions?: string[]; model_used?: string;
+    follow_up_questions?: string[]; model_used?: string; seconds?: number;
   };
 }
 export interface ChatSessionInfo { id: number; title: string; updated_at: string; message_count: number }

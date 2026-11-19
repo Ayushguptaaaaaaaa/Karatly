@@ -41,7 +41,7 @@ class ModelManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._cache: dict[str, object] = {}
-        self.cooldown_until: dict[str, datetime | None] = {"primary": None, "fallback": None}
+        self.cooldown_until: dict[str, datetime | None] = {"primary": None, "fallback": None, "chat": None}
         self.last_error: str | None = None
         self._day = date.today()
         self.runs_today = 0
@@ -50,17 +50,19 @@ class ModelManager:
     @property
     def models(self) -> dict[str, str]:
         s = get_settings()
-        return {"primary": s.LLM_MODEL, "fallback": s.LLM_FALLBACK_MODEL}
+        return {"primary": s.LLM_MODEL, "fallback": s.LLM_FALLBACK_MODEL, "chat": s.LLM_CHAT_MODEL or s.LLM_FALLBACK_MODEL}
 
     def get_llm(self, kind: str):
         from crewai import LLM
 
         s = get_settings()
         model = self.models[kind]
+        timeout = s.LLM_CHAT_TIMEOUT_SECONDS if kind == "chat" else s.LLM_TIMEOUT_SECONDS
+        key = f"{kind}:{model}"
         with self._lock:
-            if model not in self._cache:
-                self._cache[model] = LLM(model=model, api_key=s.api_key, timeout=s.LLM_TIMEOUT_SECONDS)
-            return self._cache[model]
+            if key not in self._cache:
+                self._cache[key] = LLM(model=model, api_key=s.api_key, timeout=timeout)
+            return self._cache[key]
 
     def _available(self, kind: str) -> bool:
         until = self.cooldown_until.get(kind)
@@ -74,6 +76,13 @@ class ModelManager:
         if s.LLM_MOCK_MODE or not s.api_key:
             return []
         return ["primary", "fallback"]
+
+    def chat_kinds(self) -> list[str]:
+        """Fast chat model first; the main model only as a backup (it has a low per-minute limit)."""
+        s = get_settings()
+        if s.LLM_MOCK_MODE or not s.api_key:
+            return []
+        return ["chat", "primary"] if self.models["chat"] != self.models["primary"] else ["chat"]
 
     def current_kind(self) -> str:
         if get_settings().LLM_MOCK_MODE:
@@ -99,7 +108,7 @@ class ModelManager:
         elif cls == "quota":
             until = now + timedelta(seconds=65)
         elif cls == "overload":
-            until = now + timedelta(minutes=10)
+            until = now + (timedelta(seconds=60) if kind == "chat" else timedelta(minutes=10))
         elif cls == "auth":
             until = now + timedelta(hours=1)
         with self._lock:

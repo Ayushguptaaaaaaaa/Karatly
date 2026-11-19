@@ -2,11 +2,11 @@
 
 <img src="frontend/public/gem.svg" width="72" alt="logo" />
 
-# 💎 Karatly
+# 💎 Kraftly
 
 ### The AI accountant & inventory system for jewellery shops
 
-**Karatly** tracks every design label's stock live, writes an AI monthly report with a purchase plan, and lets the owner ask questions about the shop in plain language.
+**Kraftly** tracks every design label's stock live, writes an AI monthly report with a purchase plan, and lets the owner ask questions about the shop in plain language.
 
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
@@ -43,7 +43,7 @@ A typical jeweller has many categories (necklaces, earrings, bangles…). Each c
 | 💰 **Net revenue & net profit** | For every design, subcategory and category: net revenue (sales − returns), cost of goods (average purchase cost) and net profit with margin %, for any day, month or quarter. |
 | ⚡ **Live dashboard** | KPIs, stock health, sales trend, top sellers, alerts and rule-based "today at a glance" insights. It updates instantly over Server-Sent Events. |
 | 🤖 **AI Insights report** | A CrewAI Flow of 5 crews (6 agents) writes a conclusion, recommended actions, what is and isn't selling, stock risks, entries to double-check, and seasonal trends. Every point has a **"Why?"** showing the exact numbers. |
-| 💬 **AI accountant chatbot** | Ask *"What should I restock and how much money do I need?"* The agent looks up real data with tools and answers with tables, charts and follow-up questions (English, Hindi or Hinglish). |
+| 💬 **AI accountant chatbot** | ⚡ Common questions (restock budget, profit by category/subcategory/design, today's sales, sold out, low, dead stock, top sellers) are answered **instantly from your data**. Open questions go to a fast Gemini model with the shop data pre-loaded (about 5 s). Chat never waits for the insights report. Answers come with tables, charts and follow-ups, in English, Hindi or Hinglish. |
 | 🛒 **Purchase plans** | The AI drafts what to buy. Cost = last cost × (1 + inflation %), **recalculated by code, never by the LLM**. The owner approves or rejects each line, then "receive" adds the stock. |
 | 🔐 **Owner and Admin roles** | Separate logins. Only the owner can approve purchases or reset data. |
 | 🛟 **Free-tier friendly** | Gemini primary → lighter fallback model → rule-based analysis. The app never breaks when the AI quota runs out. |
@@ -58,11 +58,12 @@ A typical jeweller has many categories (necklaces, earrings, bangles…). Each c
 <td width="50%"><b>AI Insights report + chatbot</b><br/><img src="docs/screenshots/03-insights.png" alt="Insights" /></td>
 </tr>
 <tr>
-<td width="50%"><b>AI accountant chat</b><br/><img src="docs/screenshots/04-ai-chat.png" alt="AI chat" /></td>
+<td width="50%"><b>AI accountant chat: instant answers</b><br/><img src="docs/screenshots/04-ai-chat.png" alt="AI chat" /></td>
 <td width="50%"><b>AI purchase plan with owner approval</b><br/><img src="docs/screenshots/05-purchase-plan.png" alt="Purchase plan" /></td>
 </tr>
 <tr>
-<td colspan="2"><b>Owner / Admin login</b><br/><img src="docs/screenshots/00-landing.png" alt="Landing" /></td>
+<td width="50%"><b>Net revenue & net profit by category / subcategory / design</b><br/><img src="docs/screenshots/06-profit.png" alt="Profit report" /></td>
+<td width="50%"><b>Owner / Admin login</b><br/><img src="docs/screenshots/00-landing.png" alt="Landing" /></td>
 </tr>
 </table>
 

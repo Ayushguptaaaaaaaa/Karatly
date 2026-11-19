@@ -20,7 +20,7 @@ def _split_csv(v):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(BACKEND_DIR / ".env"), extra="ignore", env_file_encoding="utf-8")
 
-    APP_NAME: str = "Jeweler AI Accountant"
+    APP_NAME: str = "Kraftly"
     APP_VERSION: str = "0.1.0"
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
@@ -48,6 +48,10 @@ class Settings(BaseSettings):
 
     LLM_MODEL: str = "gemini/gemini-3.6-flash"
     LLM_FALLBACK_MODEL: str = "gemini/gemini-3.1-flash-lite"
+    LLM_CHAT_MODEL: str = "gemini/gemini-3.1-flash-lite"   # fast model for the chatbot
+    LLM_CHAT_TIMEOUT_SECONDS: int = 25
+    LLM_CHAT_MAX_RPM: int = 14
+    CHAT_INSTANT_ANSWERS: bool = True   # answer common questions instantly from data, AI for the rest
     GEMINI_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
     LLM_MAX_RPM: int = 4
