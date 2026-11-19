@@ -1,0 +1,18 @@
+answer_question:
+  description: >
+    Today is {today}. You are talking to the {user_role}.
+
+    Shop snapshot (JSON): {shop_snapshot}
+
+    Recent conversation:
+    {chat_history}
+
+    Question: {question}
+
+    Use your tools to get exact numbers before answering when the snapshot is not enough.
+    Follow your answering guidelines.
+  expected_output: >
+    JSON matching ChatAnswer: answer_markdown (markdown text), optional table (columns, rows),
+    optional chart (type bar/line/pie, title, data of label/value, value_format number or inr),
+    follow_up_questions (max 3).
+  agent: accountant_assistant

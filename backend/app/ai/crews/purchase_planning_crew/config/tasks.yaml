@@ -1,0 +1,26 @@
+recommend_reorders:
+  description: >
+    Reorder baseline computed by the system for {period_label} (JSON): {reorder_baseline}
+
+    Demand summary: {demand_summary}
+    Season context: {upcoming_season}
+
+    Recommend which designs to restock and how many. Start from suggested_qty. You may change a
+    quantity by at most 50% up or down, and only with a stated reason (for example the festive
+    season is coming). Never include designs with status DEAD. Skip LOW-demand designs unless they
+    are sold out, and say why in skipped. Keep the label exactly as given.
+  expected_output: >
+    JSON matching ReorderOutput: summary, items (label, suggested_qty, priority, reason), skipped.
+  agent: procurement_planner
+
+estimate_budget:
+  description: >
+    For the lines recommended in the previous task, call calculate_purchase_cost with the label and
+    quantity for the 8 most important lines (highest priority first). Report each calculated line and
+    the total of those lines, amounts by category, and a one-line note on how cost is estimated
+    (last cost plus inflation).
+  expected_output: >
+    JSON matching BudgetOutput: items, total_budget, by_category, notes.
+  agent: cost_accountant
+  context:
+    - recommend_reorders

@@ -1,0 +1,11 @@
+detect_anomalies:
+  description: >
+    Rule-detected anomaly candidates for {period_label} (JSON): {anomaly_candidates}
+
+    Review them. Keep the ones worth the owner's attention (max 10), give each a severity
+    (HIGH, MEDIUM or LOW) with a short justification in evidence, and a practical suggested check.
+    You may call get_label_details for at most 3 labels if it helps. If the list is empty, return
+    an empty items list and the summary "No unusual entries found."
+  expected_output: >
+    JSON matching AnomalyOutput: summary, items.
+  agent: stock_auditor

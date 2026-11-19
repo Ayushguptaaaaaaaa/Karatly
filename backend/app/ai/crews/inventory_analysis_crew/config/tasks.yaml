@@ -1,0 +1,23 @@
+analyse_stock_position:
+  description: >
+    Facts for {period_label} (JSON): {analysis_pack}
+
+    Using these facts (status, stock, min_stock and value_tied_up in designs_of_interest, plus
+    the kpis), describe the stock position. List sold-out, low-stock and dead-stock designs with a
+    short practical note each (max 15 per list), and add one note per category that has an issue.
+    Follow your skills.
+  expected_output: >
+    JSON matching StockPositionOutput: summary, out_of_stock, low_stock, dead_stock, category_notes.
+  agent: stock_analyst
+
+classify_demand:
+  description: >
+    Using the same facts for {period_label}, explain demand. Pick up to 10 HIGH demand and up to
+    10 LOW or DEAD demand designs, each with a reason quoting the numbers (sold_period, velocity_30d,
+    change versus sold_prev_period). Add seasonal notes (season context: {upcoming_season}) and
+    month-on-month trend notes from monthly_sales_by_category.
+  expected_output: >
+    JSON matching DemandOutput: summary, high_demand, low_demand, seasonal_notes, trend_notes.
+  agent: demand_analyst
+  context:
+    - analyse_stock_position

@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+pydantic>=2
+pydantic-settings
+crewai[google-genai]
+bcrypt
+pyjwt
+python-multipart
+sse-starlette
+openpyxl
+python-dateutil
+tzdata
+pytest
+httpx
