@@ -72,6 +72,12 @@ def create_plan(body: PlanCreate, db: Session = Depends(get_db), user: User = Cu
     return svc.create_from_baseline(db, user, body.title, body.category_id)
 
 
+@router.post("/by-category", status_code=201)
+def create_by_category(db: Session = Depends(get_db), user: User = CurrentUser):
+    """One draft plan per category that needs restocking."""
+    return svc.create_per_category(db, user)
+
+
 @router.get("/{plan_id}")
 def get_plan(plan_id: int, db: Session = Depends(get_db), _: User = CurrentUser):
     return svc.detail(db, plan_id)

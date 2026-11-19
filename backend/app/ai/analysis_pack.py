@@ -123,7 +123,8 @@ def build_pack(db: Session, p: period_service.Period) -> dict:
         "reorder_baseline": [
             {"label": i["design"]["label"], "category": i["design"]["category_name"], "stock": i["current_stock"],
              "status": i["status"], "demand": i["demand_class"], "suggested_qty": i["suggested_qty"],
-             "priority": i["priority"], "expected_unit_cost": float(i["expected_unit_cost"]),
+             "priority": i["priority"], "usual_stock": i["usual_stock"], "max_qty": i["max_qty"],
+             "expected_unit_cost": float(i["expected_unit_cost"]),
              "line_total": float(i["line_total"]), "reason": i["reason"]} for i in base["items"][:40]],
         "reorder_total": float(base["total_estimated"]),
         "anomaly_candidates": anomaly_service.candidates(db, snap=snap),

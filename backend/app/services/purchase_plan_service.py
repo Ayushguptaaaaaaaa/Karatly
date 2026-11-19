@@ -59,6 +59,11 @@ def summary(plan: PurchasePlan) -> dict:
         "rejected_count": sum(1 for i in plan.items if i.decision == Decision.REJECTED),
         "pending_count": sum(1 for i in plan.items if i.decision == Decision.PENDING),
         "period_label": plan.period_label,
+        "scope": plan.scope or "ALL",
+        "category_id": plan.category_id,
+        "category_name": plan.category.name if plan.category_id and plan.category else None,
+        "budget_limit": float(plan.budget_limit) if plan.budget_limit else None,
+        "budget_note": plan.budget_note,
     }
 
 
@@ -90,9 +95,14 @@ def detail(db: Session, plan_id: int) -> dict:
         if it.decision == Decision.APPROVED:
             b["amount_approved"] += float(it.line_total)
     prio = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
-    items.sort(key=lambda x: (prio[x["priority"]], -float(x["line_total"])))
+    cat_order = {c["category"]: i for i, c in enumerate(sorted(by_cat.values(), key=lambda x: -x["amount_estimated"]))}
+    items.sort(key=lambda x: (cat_order.get(x["design"]["category_name"], 99), prio[x["priority"]], -float(x["line_total"])))
+    total = float(money(plan.total_estimated))
+    budget = float(plan.budget_limit) if plan.budget_limit else None
     return {**summary(plan), "notes": plan.notes, "insight_run_id": plan.insight_run_id,
             "items": items,
+            "total_capital_required": total,
+            "within_budget": (total <= budget + 0.01) if budget else None,
             "by_category": [{**v, "amount_estimated": round(v["amount_estimated"], 2),
                              "amount_approved": round(v["amount_approved"], 2)}
                             for v in sorted(by_cat.values(), key=lambda x: -x["amount_estimated"])]}
@@ -110,10 +120,12 @@ def _default_title(db: Session) -> str:
     return f"Purchase plan – {p.short_label}"
 
 
-def _make_item(design: Design, st, qty: int, priority: str, reason: str, infl_global) -> PurchasePlanItem:
+def _make_item(design: Design, st, qty: int, priority: str, reason: str, infl_global,
+               suggested: int | None = None) -> PurchasePlanItem:
     infl = costing_service.resolve_inflation(design, design.category, infl_global)
     c = costing_service.line(st.last_unit_cost, infl, qty)
-    return PurchasePlanItem(design_id=design.id, current_stock_at_creation=st.current_stock, suggested_qty=qty,
+    return PurchasePlanItem(design_id=design.id, current_stock_at_creation=st.current_stock,
+                            suggested_qty=suggested if suggested is not None else qty,
                             final_qty=qty, last_unit_cost=c["last_unit_cost"], inflation_pct=c["inflation_pct"],
                             expected_unit_cost=c["expected_unit_cost"], line_total=c["line_total"],
                             priority=Priority(priority), reason=reason, decision=Decision.PENDING)
@@ -131,20 +143,83 @@ def _commit_new(db: Session, user_id: int | None, plan: PurchasePlan, action: st
     return plan
 
 
-def create_from_baseline(db: Session, user: User, title: str | None, category_id: int | None) -> dict:
+def _apply_budget(plan: PurchasePlan, lines: list[dict], budget: float) -> list[dict]:
+    """Trim lines to the monthly purchase budget (high priority funded first). Updates reasons and plan note."""
+    lines, info = reorder_service.fit_to_budget(lines, budget)
+    if not info["applied"]:
+        return lines
+    plan.budget_limit = budget
+    for ln in lines:
+        if ln["fitted_qty"] < ln["qty"]:
+            ln["reason"] = (ln["reason"] + f" Reduced from {ln['qty']} to {ln['fitted_qty']} to fit your monthly budget."
+                            if ln["fitted_qty"] else ln["reason"])
+    kept = [ln for ln in lines if ln["fitted_qty"] > 0]
+    if info["reduced"] or info["skipped"]:
+        skipped = [ln.get("label", "?") for ln in lines if not ln["fitted_qty"]]
+        plan.budget_note = (f"Trimmed to your monthly purchase budget of {costing_service.format_inr(budget, 0)}: "
+                            f"{info['reduced']} line(s) reduced, {info['skipped']} skipped (lowest priority first)."
+                            + (f" Not bought this month: {', '.join(skipped)}." if skipped else "")
+                            + f" Buying everything would need {costing_service.format_inr(info['total_before'], 0)}.")
+    else:
+        plan.budget_note = f"Fits within your monthly purchase budget of {costing_service.format_inr(budget, 0)}."
+    return kept
+
+
+def _build_plan(db: Session, user_id: int | None, title: str, category_id: int | None, scope: str,
+                source: PlanSource = PlanSource.MANUAL, apply_budget: bool = True) -> PurchasePlan | None:
     snap = metrics_service.snapshot(db)
     base = reorder_service.baseline(db, category_id, snap=snap)
     if not base["items"]:
-        raise AppError("NOTHING_TO_REORDER", "Nothing needs restocking right now. All designs are above their minimum.", 422)
+        return None
     infl_global = settings_service.get(db, "inflation_pct_global")
     p = period_service.resolve(db, "month")
-    plan = PurchasePlan(title=title or _default_title(db), status=PlanStatus.DRAFT, source=PlanSource.MANUAL,
-                        created_by=user.id, period_label=p.label, period_start=p.start, period_end=p.end)
-    for b in base["items"]:
-        d = snap.designs[b["design"]["id"]]
-        plan.items.append(_make_item(d, snap.states[d.id], b["suggested_qty"], b["priority"], b["reason"], infl_global))
-    _commit_new(db, user.id, plan, "create")
+    plan = PurchasePlan(title=title, status=PlanStatus.DRAFT, source=source, scope=scope, category_id=category_id,
+                        created_by=user_id, period_label=p.label, period_start=p.start, period_end=p.end)
+    lines = [{"design_id": b["design"]["id"], "qty": b["suggested_qty"], "unit_cost": float(b["expected_unit_cost"]),
+              "priority": b["priority"], "reason": b["reason"], "label": b["design"]["label"]} for b in base["items"]]
+    budget = float(settings_service.get(db, "monthly_purchase_budget") or 0)
+    if apply_budget and budget > 0:
+        lines = _apply_budget(plan, lines, budget)
+    for ln in lines:
+        d = snap.designs[ln["design_id"]]
+        plan.items.append(_make_item(d, snap.states[d.id], ln.get("fitted_qty", ln["qty"]), ln["priority"],
+                                     ln["reason"], infl_global, suggested=ln["qty"]))
+    return _commit_new(db, user_id, plan, "create") if plan.items else None
+
+
+def create_from_baseline(db: Session, user: User, title: str | None, category_id: int | None) -> dict:
+    """Without a category: the FINAL plan for all categories (budget applied). With one: that category's plan."""
+    from app.models import Category
+
+    if category_id:
+        cat = db.get(Category, category_id)
+        if not cat:
+            raise AppError("CATEGORY_NOT_FOUND", "Category not found", 404)
+        plan = _build_plan(db, user.id, title or f"{cat.name} plan – {_month_short(db)}", category_id, "CATEGORY",
+                           apply_budget=False)
+    else:
+        plan = _build_plan(db, user.id, title or f"Final plan – {_month_short(db)} (all categories)", None, "ALL")
+    if plan is None:
+        raise AppError("NOTHING_TO_REORDER", "Nothing needs restocking right now. All designs are above their minimum.", 422)
     return detail(db, plan.id)
+
+
+def create_per_category(db: Session, user: User) -> list[dict]:
+    """One draft plan per category that needs restocking."""
+    from app.models import Category
+
+    out = []
+    for cat in db.query(Category).filter(Category.is_active.is_(True)).order_by(Category.sort_order):
+        plan = _build_plan(db, user.id, f"{cat.name} plan – {_month_short(db)}", cat.id, "CATEGORY", apply_budget=False)
+        if plan:
+            out.append(summary(_get(db, plan.id)))
+    if not out:
+        raise AppError("NOTHING_TO_REORDER", "Nothing needs restocking right now. All designs are above their minimum.", 422)
+    return out
+
+
+def _month_short(db: Session) -> str:
+    return period_service.resolve(db, "month").short_label
 
 
 def create_from_ai(db: Session, user_id: int | None, run_id: int, period: period_service.Period,
@@ -153,9 +228,11 @@ def create_from_ai(db: Session, user_id: int | None, run_id: int, period: period
     snap = metrics_service.snapshot(db)
     by_label = {d.label: d for d in snap.designs.values() if d.is_active}
     infl_global = settings_service.get(db, "inflation_pct_global")
-    plan = PurchasePlan(title=f"AI purchase plan – {period.short_label}", status=PlanStatus.DRAFT,
-                        source=PlanSource.AI, insight_run_id=run_id, created_by=user_id, notes=notes,
+    base = {b["design"]["label"]: b for b in reorder_service.baseline(db, snap=snap)["items"]}
+    plan = PurchasePlan(title=f"AI final purchase plan – {period.short_label} (all categories)", status=PlanStatus.DRAFT,
+                        source=PlanSource.AI, scope="ALL", insight_run_id=run_id, created_by=user_id, notes=notes,
                         period_label=period.label, period_start=period.start, period_end=period.end)
+    lines: list[dict] = []
     seen = set()
     for line in (reorder_output or {}).get("items", []):
         lbl = str(line.get("label", "")).strip().upper()
@@ -165,16 +242,31 @@ def create_from_ai(db: Session, user_id: int | None, run_id: int, period: period
         st = snap.states[d.id]
         if st.status == StockStatus.DEAD:
             continue
+        b = base.get(lbl)
+        if b is None:  # the system doesn't think this design needs restocking
+            continue
         try:
-            qty = max(0, min(int(line.get("suggested_qty") or 0), 500))
+            qty = int(line.get("suggested_qty") or 0)
         except (TypeError, ValueError):
             continue
-        if qty == 0:
-            continue
-        prio = str(line.get("priority") or "MEDIUM").upper()
-        prio = prio if prio in Priority.__members__ else "MEDIUM"
-        plan.items.append(_make_item(d, st, qty, prio, str(line.get("reason") or "")[:600], infl_global))
+        reason = str(line.get("reason") or b["reason"])[:600]
+        # AI may adjust the baseline, but never beyond the usual-stock cap or below half the baseline
+        lo, hi = max(1, b["suggested_qty"] // 2), max(b["suggested_qty"], b["max_qty"])
+        if qty > hi:
+            reason += f" (capped at {hi}: about {b['usual_stock']} is your usual stock for this design)"
+        qty = max(lo, min(qty, hi))
+        prio = str(line.get("priority") or b["priority"]).upper()
+        prio = prio if prio in Priority.__members__ else b["priority"]
+        lines.append({"design_id": d.id, "qty": qty, "unit_cost": float(b["expected_unit_cost"]),
+                      "priority": prio, "reason": reason, "label": d.label})
         seen.add(lbl)
+    budget = float(settings_service.get(db, "monthly_purchase_budget") or 0)
+    if budget > 0:
+        lines = _apply_budget(plan, lines, budget)
+    for ln in lines:
+        d = snap.designs[ln["design_id"]]
+        plan.items.append(_make_item(d, snap.states[d.id], ln.get("fitted_qty", ln["qty"]), ln["priority"],
+                                     ln["reason"], infl_global, suggested=ln["qty"]))
     if not plan.items:
         return None
     return _commit_new(db, user_id, plan, "create_ai")

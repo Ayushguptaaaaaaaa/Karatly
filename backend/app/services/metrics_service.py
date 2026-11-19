@@ -113,7 +113,8 @@ def snapshot(db: Session, include_inactive: bool = True) -> Snapshot:
         st.stock_value_cost = _q(st.last_unit_cost * st.current_stock)
         if st.first_movement_on:
             age = (today - st.first_movement_on).days
-            window = min(90, max(7, age))
+            # never extrapolate short histories: under 30 days, the rate is the pieces actually sold
+            window = min(90, max(30, age))
             st.velocity_30d = round(st.sold_90d / window * 30, 2)
             ref = st.last_sale_on or st.first_movement_on
             st.days_since_last_sale = (today - ref).days

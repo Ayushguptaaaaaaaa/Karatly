@@ -1,11 +1,11 @@
 import { Badge, Box, Button, Drawer, Group, Paper, SimpleGrid, Skeleton, Stack, Table, Text, ThemeIcon, UnstyledButton } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconChevronRight, IconListCheck, IconPlus, IconShoppingCart, IconSparkles } from "@tabler/icons-react";
+import { IconCategory, IconChevronRight, IconListCheck, IconPlus, IconShoppingCart, IconSparkles } from "@tabler/icons-react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { errorMessage } from "../../api/client";
-import { useCreatePlan, usePlans, useReorderBaseline } from "../../api/hooks";
+import { useCreatePlan, useCreatePlansByCategory, usePlans, useReorderBaseline } from "../../api/hooks";
 import type { PlanStatus, PlanSummary } from "../../api/types";
 import { DemandBadge, EmptyBox, ErrorState, LabelCode, Money, PageHeader, StatusBadge } from "../../components/ui";
 import { formatINR, formatRelative } from "../../lib/format";
@@ -32,6 +32,9 @@ function PlanRow({ p, i }: { p: PlanSummary; i: number }) {
               <Box style={{ minWidth: 0 }}>
                 <Group gap="xs">
                   <Text fw={700} truncate>{p.title}</Text>
+                  <Badge variant="light" color={p.scope === "ALL" ? "grape" : "blue"}>
+                    {p.scope === "ALL" ? "Final · all categories" : p.category_name ?? "Category"}
+                  </Badge>
                   <Badge color={PLAN_STATUS[p.status].color}>{PLAN_STATUS[p.status].label}</Badge>
                   {p.source === "AI" && <Badge variant="outline" color="gold">AI ✨</Badge>}
                 </Group>
@@ -62,6 +65,7 @@ export default function PlansListPage() {
   const owner = useAuth((s) => s.user?.role === "OWNER");
   const { data, isLoading, isError, refetch } = usePlans();
   const create = useCreatePlan();
+  const byCat = useCreatePlansByCategory();
   const [baseOpen, { open: openBase, close: closeBase }] = useDisclosure(false);
   const { data: base } = useReorderBaseline();
 
@@ -69,9 +73,18 @@ export default function PlansListPage() {
     create.mutateAsync({})
       .then((p) => navigate(`/app/purchase-plans/${p.id}`))
       .catch((e) => notifications.show({ color: "orange", message: errorMessage(e) }));
+  const createByCategory = () =>
+    byCat.mutateAsync()
+      .then((ps) => notifications.show({ color: "teal", title: `${ps.length} category plans created`,
+        message: ps.map((p) => `${p.category_name}: ${formatINR(p.total_estimated, { compact: true })}`).join(" · ") }))
+      .catch((e) => notifications.show({ color: "orange", message: errorMessage(e) }));
 
   const waiting = (data ?? []).filter((p) => p.status === "SUBMITTED" || (p.status === "DRAFT" && p.source === "AI"));
   const rest = (data ?? []).filter((p) => !waiting.includes(p));
+  const finals = rest.filter((p) => p.scope === "ALL");
+  const cats = rest.filter((p) => p.scope === "CATEGORY");
+  const openCats = cats.filter((p) => p.status === "DRAFT" || p.status === "SUBMITTED");
+  const catTotal = openCats.reduce((a, p) => a + p.total_estimated, 0);
 
   return (
     <>
@@ -81,7 +94,8 @@ export default function PlansListPage() {
         actions={
           <>
             <Button variant="default" leftSection={<IconListCheck size={16} />} onClick={openBase}>View reorder suggestions</Button>
-            <Button leftSection={<IconPlus size={16} />} onClick={createPlan} loading={create.isPending}>Create plan from current needs</Button>
+            <Button variant="default" leftSection={<IconCategory size={16} />} onClick={createByCategory} loading={byCat.isPending}>Create plans by category</Button>
+            <Button leftSection={<IconPlus size={16} />} onClick={createPlan} loading={create.isPending}>Create final plan (all categories)</Button>
           </>
         }
       />
@@ -102,10 +116,24 @@ export default function PlansListPage() {
           <Stack gap="sm">{waiting.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
         </Box>
       )}
-      {rest.length > 0 && (
+      {finals.length > 0 && (
+        <Box mb="xl">
+          <Text fw={700} mb="sm">Final plans (all categories)</Text>
+          <Stack gap="sm">{finals.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
+        </Box>
+      )}
+      {cats.length > 0 && (
         <Box>
-          <Text fw={700} mb="sm">All plans</Text>
-          <Stack gap="sm">{rest.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
+          <Group justify="space-between" mb="sm">
+            <Text fw={700}>Category plans</Text>
+            {openCats.length > 0 && (
+              <Text size="sm" c="dimmed">
+                Open category plans need <b className="num">{formatINR(catTotal, { compact: true })}</b> in total
+                {base && base.budget > 0 ? ` · monthly budget ${formatINR(base.budget, { compact: true })}` : ""}
+              </Text>
+            )}
+          </Group>
+          <Stack gap="sm">{cats.map((p, i) => <PlanRow key={p.id} p={p} i={i} />)}</Stack>
         </Box>
       )}
 
@@ -122,7 +150,7 @@ export default function PlansListPage() {
                 {base.items.map((i) => (
                   <Table.Tr key={i.design.id}>
                     <Table.Td>
-                      <LabelCode>{i.design.label}</LabelCode>
+                      <LabelCode>{i.design.label}</LabelCode> <Text span size="xs" c="dimmed">usual stock {i.usual_stock}</Text>
                       <Text size="xs" c="dimmed" lineClamp={2}>{i.reason}</Text>
                     </Table.Td>
                     <Table.Td><Stack gap={2}><StatusBadge status={i.status} size="xs" /><DemandBadge demand={i.demand_class} size="xs" /></Stack></Table.Td>

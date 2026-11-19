@@ -16,6 +16,8 @@ PUBLIC_KEYS = [
     "dead_stock_days",
     "reorder_cover_months",
     "quarter_system",
+    "monthly_purchase_budget",
+    "max_stock_multiple",
 ]
 
 
@@ -29,6 +31,8 @@ def defaults() -> dict[str, Any]:
         "dead_stock_days": int(s.DEAD_STOCK_DAYS),
         "reorder_cover_months": float(s.REORDER_COVER_MONTHS),
         "quarter_system": s.QUARTER_SYSTEM,
+        "monthly_purchase_budget": 0.0,   # 0 = no limit
+        "max_stock_multiple": 1.5,        # never restock above this × the most stock a design has held
         "data_version": 0,
         "milestones": {},
     }
@@ -72,6 +76,8 @@ _RULES = {
     "default_min_stock": (0, 1000),
     "dead_stock_days": (15, 730),
     "reorder_cover_months": (0.5, 6),
+    "monthly_purchase_budget": (0, 1e12),
+    "max_stock_multiple": (1, 5),
 }
 
 

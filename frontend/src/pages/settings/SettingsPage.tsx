@@ -57,6 +57,18 @@ export default function SettingsPage() {
                     <NumberInput label="Default minimum stock" description="Low-stock alert level" min={0} max={1000} value={form.default_min_stock} onChange={(v) => set("default_min_stock", Number(v) || 0)} />
                     <NumberInput label="'Not selling' after" description="Days without a sale" suffix=" days" min={15} max={730} value={form.dead_stock_days} onChange={(v) => set("dead_stock_days", Number(v) || 90)} />
                   </Group>
+                  <NumberInput
+                    label="Monthly purchase budget"
+                    description="The final purchase plan is trimmed to fit this (high-priority designs first). 0 = no limit."
+                    prefix="₹" min={0} thousandSeparator="," thousandsGroupStyle="lakh"
+                    value={form.monthly_purchase_budget} onChange={(v) => set("monthly_purchase_budget", Number(v) || 0)}
+                  />
+                  <NumberInput
+                    label="Never restock above"
+                    description="× the most stock a design has ever held (keeps orders in line with your shop's size)"
+                    suffix="×" min={1} max={5} step={0.5} decimalScale={1} w={260}
+                    value={form.max_stock_multiple} onChange={(v) => set("max_stock_multiple", Number(v) || 1.5)}
+                  />
                   <NumberInput label="Reorder should cover" description="Months of sales the purchase plan should cover" suffix=" months" min={0.5} max={6} step={0.5} decimalScale={1} value={form.reorder_cover_months} onChange={(v) => set("reorder_cover_months", Number(v) || 1.5)} w={260} />
                   <Box>
                     <Text size="sm" fw={500} mb={4}>Quarters</Text>

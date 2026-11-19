@@ -222,7 +222,7 @@ export function useReport<T>(name: string, query: Record<string, string | number
 export function useReorderBaseline(category_id?: number) {
   return useQuery({
     queryKey: ["reorder", category_id],
-    queryFn: () => api<{ items: ReorderItem[]; total_estimated: number; by_category: { category: string; amount: number }[] }>(
+    queryFn: () => api<{ items: ReorderItem[]; total_estimated: number; budget: number; by_category: { category: string; amount: number }[] }>(
       "/reorder/baseline", { query: { category_id } }),
   });
 }
@@ -248,6 +248,16 @@ function usePlanMutation<TVars>(fn: (v: TVars) => Promise<PlanDetail>) {
 export const useCreatePlan = () =>
   usePlanMutation((b: { title?: string; category_id?: number }) =>
     api<PlanDetail>("/purchase-plans", { method: "POST", body: { from_baseline: true, ...b } }));
+export function useCreatePlansByCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<PlanSummary[]>("/purchase-plans/by-category", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plans"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
 export const usePatchPlan = () =>
   usePlanMutation(({ id, ...b }: { id: number; title?: string; notes?: string }) =>
     api<PlanDetail>(`/purchase-plans/${id}`, { method: "PATCH", body: b }));

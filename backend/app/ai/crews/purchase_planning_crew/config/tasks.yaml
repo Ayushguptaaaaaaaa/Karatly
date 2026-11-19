@@ -5,9 +5,10 @@ recommend_reorders:
     Demand summary: {demand_summary}
     Season context: {upcoming_season}
 
-    Recommend which designs to restock and how many. Start from suggested_qty. You may change a
-    quantity by at most 50% up or down, and only with a stated reason (for example the festive
-    season is coming). Never include designs with status DEAD. Skip LOW-demand designs unless they
+    Recommend which designs to restock and how many. Start from suggested_qty. You may lower a
+    quantity, or raise it with a stated reason (for example the festive season is coming), but NEVER
+    above max_qty: that is the shop's usual stock level for the design, and the shop's capital is
+    limited. Never include designs with status DEAD. Skip LOW-demand designs unless they
     are sold out, and say why in skipped. Keep the label exactly as given.
   expected_output: >
     JSON matching ReorderOutput: summary, items (label, suggested_qty, priority, reason), skipped.

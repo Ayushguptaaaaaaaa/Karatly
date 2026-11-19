@@ -41,6 +41,10 @@ class PurchasePlan(TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(120))
     status: Mapped[PlanStatus] = mapped_column(enum_col(PlanStatus), default=PlanStatus.DRAFT)
     source: Mapped[PlanSource] = mapped_column(enum_col(PlanSource), default=PlanSource.MANUAL)
+    scope: Mapped[str] = mapped_column(String(12), default="ALL", server_default="ALL")  # ALL | CATEGORY
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
+    budget_limit: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    budget_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     insight_run_id: Mapped[int | None] = mapped_column(ForeignKey("insight_runs.id", ondelete="SET NULL"), nullable=True)
     period_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -59,6 +63,7 @@ class PurchasePlan(TimestampMixin, Base):
         back_populates="plan", cascade="all, delete-orphan", order_by="PurchasePlanItem.id"
     )
     creator: Mapped[User | None] = relationship(foreign_keys=[created_by])
+    category: Mapped["Category | None"] = relationship("Category")
 
 
 class PurchasePlanItem(Base):

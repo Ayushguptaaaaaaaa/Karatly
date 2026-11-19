@@ -124,6 +124,8 @@ class SettingsPatch(In):
     dead_stock_days: int | None = None
     reorder_cover_months: float | None = None
     quarter_system: str | None = None
+    monthly_purchase_budget: float | None = None
+    max_stock_multiple: float | None = None
 
 
 @router.get("/settings", tags=["settings"])

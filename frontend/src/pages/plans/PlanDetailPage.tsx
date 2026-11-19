@@ -28,7 +28,7 @@ import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import { IconCheck, IconDownload, IconInfoCircle, IconPrinter, IconSend, IconTrash, IconTruckDelivery, IconX } from "@tabler/icons-react";
 import dayjs from "dayjs";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { download, errorMessage } from "../../api/client";
 import { useDecidePlan, useDeletePlan, usePatchPlan, usePatchPlanItem, usePlan, useReceivePlan, useRemovePlanItem, useSubmitPlan } from "../../api/hooks";
@@ -155,6 +155,16 @@ export default function PlanDetailPage() {
     }
   }, [plan?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const catSum = useMemo(() => {
+    const m: Record<string, { lines: number; total: number }> = {};
+    plan?.items.forEach((i) => {
+      const c = (m[i.design.category_name] ??= { lines: 0, total: 0 });
+      c.lines += 1;
+      c.total += i.line_total;
+    });
+    return m;
+  }, [plan]);
+
   const sums = useMemo(() => {
     const s = { approved: 0, pending: 0, rejected: 0 };
     plan?.items.forEach((i) => {
@@ -206,6 +216,9 @@ export default function PlanDetailPage() {
             <Group gap="xs" mb={4}>
               <Badge color={PLAN_STATUS[plan.status].color}>{PLAN_STATUS[plan.status].label}</Badge>
               {plan.source === "AI" && <Badge variant="outline" color="gold">AI ✨</Badge>}
+              <Badge variant="light" color={plan.scope === "ALL" ? "grape" : "blue"}>
+                {plan.scope === "ALL" ? "Final plan · all categories" : `Category · ${plan.category_name ?? ""}`}
+              </Badge>
               {plan.period_label && <Badge variant="light" color="gray">{plan.period_label}</Badge>}
             </Group>
             {editable ? (
@@ -229,7 +242,7 @@ export default function PlanDetailPage() {
           </Stepper>
         </Group>
         <SimpleGrid cols={{ base: 2, md: 4 }} mt="lg">
-          <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Estimated total</Text><Text className="serif" fw={700} fz="xl"><Money value={plan.total_estimated} compact /></Text></Paper>
+          <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Total capital required</Text><Text className="serif" fw={700} fz="xl"><Money value={plan.total_estimated} compact /></Text></Paper>
           <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Approved</Text><Text className="serif" fw={700} fz="xl" c="teal.7"><Money value={plan.total_approved} compact /></Text></Paper>
           <Paper p="sm" withBorder radius="md"><Text size="xs" c="dimmed">Lines</Text><Text fw={700} fz="xl">{plan.item_count} <Text span size="xs" c="dimmed">({plan.pending_count} pending)</Text></Text></Paper>
           <Paper p="sm" withBorder radius="md">
@@ -247,6 +260,11 @@ export default function PlanDetailPage() {
         ) : plan.notes ? <Text mt="md" size="sm" c="dimmed">{plan.notes}</Text> : null}
       </Paper>
 
+      {plan.budget_note && (
+        <Alert mb="md" color={plan.budget_note.startsWith("Fits") ? "teal" : "orange"} icon={<IconInfoCircle size={18} />}>
+          {plan.budget_note}
+        </Alert>
+      )}
       {!owner && editable && plan.status === "SUBMITTED" && (
         <Alert mb="md" color="blue" icon={<IconInfoCircle size={18} />}>Waiting for owner approval. You can still adjust quantities.</Alert>
       )}
@@ -269,8 +287,22 @@ export default function PlanDetailPage() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {plan.items.map((i) => (
-                <Table.Tr key={i.id} className={highlight.includes(i.id) ? "flash-row" : undefined} bg={i.decision === "REJECTED" ? "var(--mantine-color-red-light)" : undefined}>
+              {plan.items.map((i, idx) => (
+                <Fragment key={i.id}>
+                {(idx === 0 || plan.items[idx - 1].design.category_name !== i.design.category_name) && (
+                  <Table.Tr bg="var(--mantine-color-gold-light)">
+                    <Table.Td colSpan={plan.status === "DRAFT" ? 10 : 9}>
+                      <Group justify="space-between">
+                        <Text fw={700}>{i.design.category_name}</Text>
+                        <Text size="sm" fw={600}>
+                          {catSum[i.design.category_name]?.lines} lines · subtotal{" "}
+                          <span className="num">{formatINR(catSum[i.design.category_name]?.total ?? 0)}</span>
+                        </Text>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                <Table.Tr className={highlight.includes(i.id) ? "flash-row" : undefined} bg={i.decision === "REJECTED" ? "var(--mantine-color-red-light)" : undefined}>
                   <Table.Td>
                     <Group gap="sm" wrap="nowrap">
                       <PhotoThumb url={i.design.photo_url} size={34} />
@@ -311,9 +343,32 @@ export default function PlanDetailPage() {
                     </Table.Td>
                   )}
                 </Table.Tr>
+                </Fragment>
               ))}
             </Table.Tbody>
           </Table>
+        </Box>
+        <Box p="lg" style={{ borderTop: "2px solid var(--mantine-color-gold-5)" }}>
+          <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">
+            <Stack gap={4}>
+              {Object.entries(catSum).map(([c, v]) => (
+                <Group key={c} gap="xl" justify="space-between" miw={320}>
+                  <Text size="sm" c="dimmed">{c} ({v.lines} lines)</Text>
+                  <Text size="sm" className="num">{formatINR(v.total)}</Text>
+                </Group>
+              ))}
+            </Stack>
+            <Box ta="right">
+              <Text size="sm" c="dimmed">{plan.scope === "ALL" ? "Total capital required for this month" : `Capital required for ${plan.category_name ?? "this category"}`}</Text>
+              <Text className="serif" fw={800} fz={34} lh={1.1}>{formatINR(plan.total_capital_required)}</Text>
+              <Text size="xs" c="dimmed">{formatINR(plan.total_capital_required, { compact: true })} · {plan.item_count} designs · approved so far {formatINR(plan.total_approved, { compact: true })}</Text>
+              {plan.budget_limit ? (
+                <Badge mt={6} color={plan.within_budget ? "teal" : "red"} variant="light">
+                  {plan.within_budget ? "Within" : "Over"} your monthly budget of {formatINR(plan.budget_limit, { compact: true })}
+                </Badge>
+              ) : null}
+            </Box>
+          </Group>
         </Box>
       </Paper>
 

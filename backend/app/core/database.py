@@ -44,7 +44,29 @@ def get_engine():
 def create_all():
     import app.models  # noqa: F401  (register models)
 
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    _add_missing_columns(engine)
+
+
+def _add_missing_columns(engine) -> None:
+    """POC-friendly migration: add new columns to existing tables so old databases keep working."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing:
+                    continue
+                ddl_type = col.type.compile(dialect=engine.dialect)
+                default = ""
+                if col.server_default is not None:
+                    default = f" DEFAULT '{col.server_default.arg}'"
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl_type}{default}'))
 
 
 def get_db() -> Iterator[Session]:
