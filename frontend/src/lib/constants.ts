@@ -56,8 +56,12 @@ export const METAL_OPTIONS = [
   { value: "GOLD", label: "Gold" },
   { value: "SILVER", label: "Silver" },
   { value: "PLATINUM", label: "Platinum" },
+  { value: "IMITATION", label: "Imitation (AD, Kundan…)" },
   { value: "OTHER", label: "Other" },
 ];
+export const METAL_LABEL: Record<string, string> = {
+  GOLD: "Gold", SILVER: "Silver", PLATINUM: "Platinum", IMITATION: "Imitation", OTHER: "Other",
+};
 
 export const QUICK_CATEGORIES: { name: string; icon: string }[] = [
   { name: "Necklaces", icon: "necklace" },

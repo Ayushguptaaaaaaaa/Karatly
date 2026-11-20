@@ -14,7 +14,6 @@ import { StockStepper } from "../../components/stock";
 import { CategoryIcon, DemandBadge, EmptyBox, LabelCode, Money, SectionCard, StatusBadge } from "../../components/ui";
 import { MOVEMENT_META, STATUS_META } from "../../lib/constants";
 import { formatDate, formatDayWord, formatINR, formatRelative } from "../../lib/format";
-import { useUi } from "../../stores";
 import { EditDesignModal } from "./components";
 
 export function MovementTimeline({ items }: { items: Movement[] }) {
@@ -107,7 +106,6 @@ export default function DesignDetailPage() {
   const delPhoto = useDeletePhoto();
   const arch = useArchiveDesign();
   const del = useDeleteDesign();
-  const openQuick = useUi((s) => s.openQuickStock);
   const [editOpen, { open: openEdit, close: closeEdit }] = useDisclosure(false);
   const [histMode, setHistMode] = useState<"pieces" | "money">("pieces");
 
@@ -245,10 +243,10 @@ export default function DesignDetailPage() {
                 <Stack gap="xs">
                   <StockStepper target={{ id: d.id, label: d.label, name: d.name, current_stock: d.current_stock, selling_price: d.selling_price, cost_price: d.last_unit_cost, photo_url: d.photo_url, status: d.status }} size="lg" />
                   <Group gap="xs">
-                    <Button size="sm" variant="light" color="red" leftSection={<IconMinus size={14} />} disabled={!d.current_stock || !d.is_active} onClick={() => openQuick("OUT", d.id)}>
+                    <Button size="sm" variant="light" color="red" leftSection={<IconMinus size={14} />} disabled={!d.current_stock || !d.is_active} onClick={() => navigate(`/app/sales/new?design=${d.id}`)}>
                       Record sale
                     </Button>
-                    <Button size="sm" variant="light" color="teal" leftSection={<IconPlus size={14} />} disabled={!d.is_active} onClick={() => openQuick("IN", d.id)}>
+                    <Button size="sm" variant="light" color="teal" leftSection={<IconPlus size={14} />} disabled={!d.is_active} onClick={() => navigate(`/app/stock?tab=quick&mode=IN&design=${d.id}`)}>
                       Add stock
                     </Button>
                   </Group>

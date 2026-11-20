@@ -97,7 +97,7 @@ function CurrentPlanCard({ p }: { p: PlanSummary }) {
   );
 }
 
-export default function PlansListPage() {
+export default function PlansListPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = usePlans();
   const create = useCreatePlan();
@@ -114,10 +114,9 @@ export default function PlansListPage() {
 
   return (
     <>
-      <PageHeader
-        title="Purchase Plans"
-        subtitle="One plan at a time. The AI suggests what to buy and how many; you change any quantity and approve."
-      />
+      {!embedded && (
+        <PageHeader title="Purchase plan" subtitle="The AI suggests what to buy. You change any quantity and approve." />
+      )}
       {isError && <ErrorState onRetry={() => refetch()} />}
       {isLoading && <Stack>{[1, 2].map((i) => <Skeleton key={i} h={120} radius="md" />)}</Stack>}
 

@@ -148,10 +148,24 @@ def report(pack: dict, plan_total: float | None = None) -> o.InsightsReport:
                            if dead_n else "No dead stock right now."),
         money_view=(f"Stock worth {format_inr_compact(k['stock_value_cost'])} at cost. "
                     f"Suggested restock budget {format_inr_compact(total)}."),
+        customers_view=_customers_view(pack.get("customers_regions_dealers") or {}),
         risks=f"{k['out_of_stock']} sold out and {k['low_stock']} low-stock designs may cost sales.",
         data_quality_notes=(["Limited sales history: insights will improve as you record more sales."]
                             if pack["data_sufficiency"]["level"] != "GOOD" else []),
     )
+
+
+def _customers_view(w: dict) -> str:
+    parts = []
+    if w.get("top_customers"):
+        c = w["top_customers"][0]
+        parts.append(f"Top customer: {c['name']} ({format_inr_compact(c['revenue'])}).")
+    if w.get("top_cities"):
+        c = w["top_cities"][0]
+        parts.append(f"Top city: {c['name']} ({c['share_pct']}% of sales).")
+    if w.get("top_dealers"):
+        parts.append(f"Main dealer: {w['top_dealers'][0]['name']}.")
+    return " ".join(parts)
 
 
 def chat_answer(snapshot: dict, question: str) -> o.ChatAnswer:

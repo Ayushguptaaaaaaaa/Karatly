@@ -90,6 +90,9 @@ def shop_snapshot(db: Session) -> dict:
     des_p = profit_service.profitability(db, month, "design", limit=10)
     base = reorder_service.baseline(db)
     dead = report_service.dead_stock(db)
+    from app.services import explorer_service
+
+    who = explorer_service.summary(db, month.start, month.end)
     pick = ("name", "category", "units_sold", "units_returned", "net_revenue", "cogs", "net_profit", "margin_pct")
 
     def rows(rep):
@@ -102,6 +105,7 @@ def shop_snapshot(db: Session) -> dict:
                        "profit_by_subcategory": rows(sub_p), "top_designs_by_profit": rows(des_p),
                        "top_sellers": [{"label": t["label"], "sold": t["sold_units"], "sales_value": t["sales_value"]}
                                        for t in ov["top_sellers"]]},
+        "customers_regions_dealers_this_month": who,
         "stock_health": ov["stock_health"],
         "sold_out_and_low": [{"label": a["label"], "category": a["category_name"], "status": a["status"],
                               "stock": a["current_stock"], "demand": a["demand_class"], "sold_30d": a["sold_last_30d"]}

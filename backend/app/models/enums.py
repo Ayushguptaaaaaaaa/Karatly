@@ -10,6 +10,7 @@ class Metal(StrEnum):
     GOLD = "GOLD"
     SILVER = "SILVER"
     PLATINUM = "PLATINUM"
+    IMITATION = "IMITATION"   # artificial / fashion jewellery: AD (American Diamond), Kundan, oxidised, one-gram gold…
     OTHER = "OTHER"
 
 

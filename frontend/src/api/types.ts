@@ -58,9 +58,10 @@ export interface Movement {
   type: MovementType; direction: "IN" | "OUT"; quantity: number; unit_price: number | null; value: number | null;
   occurred_on: string; note: string | null; source: string; created_by: { id: number; display_name: string } | null;
   created_at: string | null; is_void: boolean; voided_at: string | null; void_reason: string | null;
+  bill: { id: number; number: string; customer_name: string } | null; dealer: { id: number; name: string } | null;
 }
 export interface DesignBrief { id: number; label: string; current_stock: number; status: StockStatus; demand_class: DemandClass }
-export interface MovementResult { movement: Movement; design: DesignBrief }
+export interface MovementResult { movement: Movement; design: DesignBrief; bill_id?: number | null; bill_number?: string | null }
 
 export interface PeriodInfo {
   period_type: PeriodType; start: string; end: string; effective_end: string; label: string; short_label: string;
@@ -151,6 +152,14 @@ export interface InsightsReport {
   key_numbers: { label: string; value: string }[];
   recommended_actions: { title: string; why: string; priority: Priority; target: string }[];
   whats_selling: string; whats_not_selling: string; money_view: string; risks: string; data_quality_notes: string[];
+  customers_view?: string;
+}
+export interface WhoRow { name: string; pieces: number; revenue: number; share_pct: number; bills: number }
+export interface WhoSummary {
+  top_customers: WhoRow[]; top_cities: WhoRow[]; top_states: WhoRow[]; top_countries: WhoRow[];
+  material_mix: WhoRow[]; payment_mix: WhoRow[];
+  customers: { named_customers: number; bills: number; walk_in_share_pct: number };
+  top_dealers: { name: string; pieces: number; amount: number; designs: number; share_pct: number }[];
 }
 export interface InsightRun {
   id: number; job_id: string | null; status: "RUNNING" | "COMPLETE" | "PARTIAL" | "FAILED"; period_type: string;
@@ -165,7 +174,7 @@ export interface InsightRun {
   purchase_plan: PlanSummary | null;
   facts: {
     sales_trend_by_category?: { name: string; points: { month: string; units: number; value: number }[] }[];
-    kpis?: Kpis; demand_counts?: Record<string, number>; stock_health?: Record<string, number>;
+    kpis?: Kpis; demand_counts?: Record<string, number>; stock_health?: Record<string, number>; who?: WhoSummary;
   };
   evidence: {
     designs_of_interest: Record<string, unknown>[]; categories: Record<string, unknown>[];
@@ -188,6 +197,7 @@ export interface Settings {
   shop_name: string; owner_name: string; inflation_pct_global: number; default_min_stock: number;
   dead_stock_days: number; reorder_cover_months: number; quarter_system: "FINANCIAL" | "CALENDAR";
   monthly_purchase_budget: number; max_stock_multiple: number;
+  shop_address: string; shop_phone: string; shop_gstin: string; gst_pct: number;
 }
 export interface AiStatus {
   mock_mode: boolean; primary_model: string; fallback_model: string; primary_available: boolean;

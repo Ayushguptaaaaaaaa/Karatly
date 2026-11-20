@@ -187,7 +187,9 @@ class InsightsFlow(Flow[InsightsState]):
                                          | {"high": [d["label"] for d in o.get("demand", {}).get("high_demand", [])][:8],
                                             "low": [d["label"] for d in o.get("demand", {}).get("low_demand", [])][:8]}),
                     "anomaly_summary": o.get("anomalies", {}).get("summary", ""),
-                    "plan_summary": _j(plan_summary), "data_sufficiency": _j(pack["data_sufficiency"])},
+                    "plan_summary": _j(plan_summary), "data_sufficiency": _j(pack["data_sufficiency"]),
+                    "who_summary": _j({k: (v[:3] if isinstance(v, list) else v)
+                                       for k, v in pack.get("customers_regions_dealers", {}).items()})},
             output_models=[InsightsReport],
             fallback=lambda: [fallbacks.report(pack, self.state.plan_total)],
         )

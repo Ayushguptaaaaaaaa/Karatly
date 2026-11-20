@@ -9,6 +9,7 @@ from app.api.routes import (
     insights_misc,
     periods,
     purchase_plans,
+    sales,
     stock,
 )
 
@@ -22,3 +23,4 @@ api_router.include_router(periods.router)
 api_router.include_router(insights_misc.router)
 api_router.include_router(purchase_plans.router)
 api_router.include_router(ai_routes.router)
+api_router.include_router(sales.router)

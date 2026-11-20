@@ -107,8 +107,27 @@ def _design_brief(db: Session, design: Design) -> dict:
 
 def record(db: Session, user: User, data: dict) -> dict:
     design = _resolve_design(db, data.get("design_id"), data.get("label"))
+    if MovementType(data["type"]) == MovementType.SALE:
+        # every sale is billed (customer optional = walk-in)
+        from app.services import billing_service
+
+        bill = billing_service.create_bill(db, user, {
+            "bill_date": data.get("occurred_on"), "customer_id": data.get("customer_id"),
+            "customer": data.get("customer"), "payment_mode": data.get("payment_mode"), "notes": data.get("note"),
+            "items": [{"design_id": design.id, "quantity": data.get("quantity"), "unit_price": data.get("unit_price")}],
+        })
+        m = bill.items[0]
+        db.refresh(m)
+        return {"movement": movement_out(m), "design": _design_brief(db, design), "bill_id": bill.id,
+                "bill_number": bill.number}
     m = _add_movement(db, user, design, data["type"], data.get("quantity"), data.get("occurred_on"),
                       data.get("unit_price"), data.get("note"))
+    if data.get("dealer_id"):
+        if m.type not in (MovementType.PURCHASE, MovementType.OPENING, MovementType.SUPPLIER_RETURN):
+            raise AppError("VALIDATION_ERROR", "A dealer can only be set on purchases or returns to a dealer.", 422)
+        from app.services import contacts_service
+
+        m.dealer_id = contacts_service.get_dealer(db, int(data["dealer_id"])).id
     audit_service.log(db, user, "CREATE", "movement", m.id,
                       after={"label": design.label, "type": m.type.value, "qty": m.quantity})
     ev = data_version_service.bump(db, "movement", "create", m.id)
@@ -151,6 +170,19 @@ def void(db: Session, user: User, movement_id: int, reason: str | None) -> dict:
     if m.is_void:
         raise AppError("ALREADY_VOID", "This entry was already undone.", 409)
     design = m.design
+    if m.bill_id:
+        from app.services import billing_service
+
+        live = [x for x in m.bill.items if not x.is_void]
+        if len(live) > 1:
+            raise AppError("PART_OF_BILL", f"This sale is on bill {m.bill.number} with {len(live)} designs. "
+                                           "Cancel the whole bill instead.", 409, {"bill_id": m.bill_id})
+        billing_service.void_bill(db, user, m.bill_id, reason, commit=False)
+        ev = data_version_service.bump(db, "movement", "void", m.id)
+        db.commit()
+        data_version_service.publish(ev)
+        db.refresh(m)
+        return {"movement": movement_out(m), "design": _design_brief(db, design)}
     if m.type == MovementType.OPENING:
         others = db.query(StockMovement).filter(StockMovement.design_id == design.id, StockMovement.id != m.id,
                                                 StockMovement.is_void.is_(False)).count()
@@ -176,7 +208,8 @@ def void(db: Session, user: User, movement_id: int, reason: str | None) -> dict:
 
 def list_movements(db: Session, *, design_id=None, label=None, category_id=None, types=None, date_from=None,
                    date_to=None, include_void=True, created_by=None, page=1, page_size=25) -> dict:
-    q = db.query(StockMovement).options(joinedload(StockMovement.design), joinedload(StockMovement.creator))
+    q = db.query(StockMovement).options(joinedload(StockMovement.design), joinedload(StockMovement.creator),
+                                        joinedload(StockMovement.bill), joinedload(StockMovement.dealer))
     if design_id:
         q = q.filter(StockMovement.design_id == design_id)
     if label:

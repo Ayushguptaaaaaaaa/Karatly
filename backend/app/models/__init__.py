@@ -10,11 +10,15 @@ from app.models.misc import (
     PurchasePlanItem,
     Setting,
 )
+from app.models.sales import Bill, Customer, Dealer
 from app.models.stock_movement import StockMovement
 from app.models.user import User
 
 __all__ = [
     "AuditLog",
+    "Bill",
+    "Customer",
+    "Dealer",
     "Category",
     "ChatMessage",
     "ChatSession",

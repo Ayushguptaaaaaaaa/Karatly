@@ -38,11 +38,15 @@ A typical jeweller has many categories (necklaces, earrings, bangles…). Each c
 | | |
 |---|---|
 | 🗂️ **Inventory, label by label** | Category → subcategory → design label → stock. Add 50 designs at once (labels are pre-filled, and you can paste from Excel), or import a full Excel sheet. |
+| 🧾 **Bills with PDF** | Customer, one or more designs, discount and GST (CGST + SGST). Every sale gets a numbered bill with a **downloadable PDF** (₹, amount in words). Cancel a bill and the stock comes back. |
+| 👥 **Customers & dealers** | Customers with city, state and country; dealers (suppliers) with GSTIN. Every purchase records which dealer it came from, at what quantity and cost. |
+| 📊 **Excel-style explorer** | Filter sales by date, country, state, city, customer, category, material and payment, or purchases by dealer. Group by any of them, sort any column, click a row to drill in, export to Excel. e.g. *November + India → top customer*. |
 | ➕➖ **Two-tap stock changes** | Every row has `−` / `+`. Record a sale, new stock, a return or a correction, with **Undo** on every entry. |
 | 📅 **Day, month and quarter views** | Opening, received, sold and closing stock per label for any day, month or quarter (Indian financial-year quarters, Apr–Mar). Export to Excel. |
 | 💰 **Net revenue & net profit** | For every design, subcategory and category: net revenue (sales − returns), cost of goods (average purchase cost) and net profit with margin %, for any day, month or quarter. |
 | ⚡ **Live dashboard** | KPIs, stock health, sales trend, top sellers, alerts and rule-based "today at a glance" insights. It updates instantly over Server-Sent Events. |
-| 🤖 **AI Insights report** | A CrewAI Flow of 5 crews (6 agents) writes a conclusion, recommended actions, what is and isn't selling, stock risks, entries to double-check, and seasonal trends. Every point has a **"Why?"** showing the exact numbers. |
+| 🤖 **AI Insights report** | A CrewAI Flow of 5 crews (6 agents) writes a short conclusion, recommended actions, what is and isn't selling, **who buys and from where** (top customers, cities, countries, gold vs imitation, dealers), stock risks and seasonal trends. Every point has a **"Why?"** showing the exact numbers. |
+| 💍 **Jewellery know-how built in** | A shared skill gives every agent trade knowledge: gold purity (22K/18K, hallmark + HUID), silver 925, pricing (rate × weight + making + 3% GST), **imitation jewellery** (AD, Kundan, oxidised, one-gram gold), Indian seasons and dealer practice. |
 | 💬 **AI accountant chatbot** | ⚡ Common questions (restock budget, profit by category/subcategory/design, today's sales, sold out, low, dead stock, top sellers) are answered **instantly from your data**. Open questions go to a fast Gemini model with the shop data pre-loaded (about 5 s). Chat never waits for the insights report. Answers come with tables, charts and follow-ups, in English, Hindi or Hinglish. |
 | 🛒 **Purchase plan** | **One plan at a time.** The AI suggests what to buy and how many (sized to the shop's usual stock, fitted to an optional monthly budget). The owner changes any quantity (0 = don't buy this month), sees the total capital update live, and approves in one click. Re-running the AI updates the same plan and keeps the owner's changes. Cost = last cost × (1 + inflation %), **recalculated by code, never by the LLM**. |
 | 🔐 **Owner and Admin roles** | Separate logins. Only the owner can approve purchases or reset data. |
@@ -136,7 +140,7 @@ Go to **http://localhost:5173** and choose:
 | Owner | `owner` | `owner` |
 | Admin | `admin` | `admin` |
 
-The shop starts **empty**. Follow the setup checklist, or click **Load demo data** for a 12-month sample shop (8 categories, about 120 designs).
+The shop starts **empty**. Follow the setup checklist, or click **Load demo data** for a 12-month sample shop (9 categories incl. imitation jewellery, about 136 designs, 60 customers, 6 dealers and every sale billed).
 
 ---
 

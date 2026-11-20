@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Combobox,
-  Drawer,
   Group,
   InputBase,
   Loader,
@@ -28,13 +27,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { api, notifyError } from "../api/client";
+import { api, download, notifyError } from "../api/client";
 import { invalidateData, useDesignSearch, useRecordMovement } from "../api/hooks";
 import type { DesignSearchHit, MovementResult, MovementType, StockStatus } from "../api/types";
 import { IN_REASONS, MOVEMENT_META, OUT_REASONS, STATUS_META } from "../lib/constants";
 import { milestone } from "../lib/confetti";
 import { formatINR, todayISO } from "../lib/format";
-import { useUi } from "../stores";
+import { CustomerPicker, DealerPicker } from "./contacts";
 import { LabelCode, PhotoThumb, StatusBadge } from "./ui";
 
 export interface StockTarget {
@@ -65,7 +64,9 @@ export function useUndoToast() {
       message: (
         <Group justify="space-between" gap="xs" wrap="nowrap">
           <Text size="sm" c="dimmed">
-            {meta.label} · {res.design.current_stock} left
+            {res.bill_number ? (
+              <>Bill {res.bill_number} · <Anchor size="sm" component="button" onClick={() => download(`/bills/${res.bill_id}/pdf`, undefined, `${res.bill_number}.pdf`)}>PDF</Anchor></>
+            ) : meta.label}{" "}· {res.design.current_stock} left
           </Text>
           <Button
             size="compact-xs"
@@ -104,6 +105,8 @@ export function QuickStockForm({
   const [showDate, setShowDate] = useState(false);
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
+  const [customer, setCustomer] = useState<number | null>(null);
+  const [dealer, setDealer] = useState<number | null>(null);
   const rec = useRecordMovement();
   const undoToast = useUndoToast();
 
@@ -125,6 +128,7 @@ export function QuickStockForm({
       const res = await rec.mutateAsync({
         design_id: target.id, type, quantity: qty, occurred_on: date,
         unit_price: showPrice && price !== "" ? Number(price) : null, note: note || null,
+        customer_id: type === "SALE" ? customer : null, dealer_id: type === "PURCHASE" ? dealer : null,
       });
       undoToast(res);
       if (type === "SALE") milestone("first_sale");
@@ -187,6 +191,8 @@ export function QuickStockForm({
           thousandsGroupStyle="lakh"
         />
       )}
+      {type === "SALE" && <CustomerPicker size="sm" label="Customer (empty = walk-in)" value={customer} onChange={setCustomer} inPopover={!compact} />}
+      {type === "PURCHASE" && <DealerPicker size="sm" label="Dealer" value={dealer} onChange={setDealer} inPopover={!compact} />}
       <Group gap="xs" justify="space-between">
         {showDate ? (
           <DateInput
@@ -527,20 +533,10 @@ export function QuickEntryPanel({ initialMode = "OUT", initialDesignId, onRecord
       </AnimatePresence>
       {!picked && (
         <Text size="xs" c="dimmed">
-          Tip: type the full label and press Enter (works with barcode scanners). Alt+O = Stock OUT, Alt+I = Stock IN. Today's
-          sale value so far is shown on the Stock page.
+          Tip: type or scan a label and press Enter. For a bill with several designs, use Sales → New bill.
         </Text>
       )}
     </Stack>
-  );
-}
-
-export function QuickStockDrawer() {
-  const { quickStockOpen, quickStockMode, quickStockDesignId, closeQuickStock } = useUi();
-  return (
-    <Drawer opened={quickStockOpen} onClose={closeQuickStock} position="right" size="md" title={<Text fw={700}>Quick stock</Text>}>
-      {quickStockOpen && <QuickEntryPanel initialMode={quickStockMode} initialDesignId={quickStockDesignId} />}
-    </Drawer>
   );
 }
 

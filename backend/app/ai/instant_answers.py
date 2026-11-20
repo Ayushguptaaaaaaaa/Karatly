@@ -12,6 +12,7 @@ from app.ai.outputs import ChatAnswer, ChatChart, ChartPoint, ChatTable
 from app.services.costing_service import format_inr_compact as inr
 
 LABEL_RE = re.compile(r"\b[A-Za-z]{1,5}-\d{2,}\b")
+FILTER_RE = re.compile(r"\b(in|from|for|during)\s+(?!this\b|the\b|my\b|me\b|total\b)[a-z]")
 REASONING = ("why", "should i", "should we", "how can", "how do i improve", "advise", "suggest", "recommend", "kyun", "kya karu")
 
 
@@ -79,6 +80,56 @@ def answer(question: str, snap: dict, strict: bool = True) -> ChatAnswer | None:
         return ChatAnswer(answer_markdown=text, table=_profit_table(rows, "Category") if rows else None,
                           chart=_bar("Net profit by category", rows, "net_profit"),
                           follow_up_questions=["Show net profit by subcategory", "Which designs made the most profit this month?"])
+
+    # --- customers / regions / dealers (this month) ----------------------------------------
+    who = snap.get("customers_regions_dealers_this_month") or {}
+    # "top customer in India in November" has a filter -> AI + breakdown tool; "this month" is fine here
+    filtered = bool(FILTER_RE.search(q))
+    about_who = _has(q, "dealer", "supplier", "vendor", "karigar", "customer", "client", "grahak", "buyer", "who bought",
+                     "country", "countries", "state", "city", "cities", "region")
+    if strict and filtered and about_who:
+        return None
+    if _has(q, "dealer", "supplier", "vendor", "karigar") and not (strict and filtered):
+        rows = who.get("top_dealers") or []
+        if not rows:
+            return ChatAnswer(answer_markdown=f"No purchases from dealers recorded in {period} yet.")
+        top = rows[0]
+        return ChatAnswer(
+            answer_markdown=f"**Dealers, {period}:** most bought from **{top['name']}**: {top['pieces']} pieces for "
+                            f"**{inr(top['amount'])}** ({top['share_pct']}% of purchases).",
+            table=ChatTable(columns=["Dealer", "Pieces", "Amount (₹)", "Designs"],
+                            rows=[[r["name"], r["pieces"], round(r["amount"]), r["designs"]] for r in rows]),
+            chart=_bar("Purchases by dealer", [{"name": r["name"], "v": r["amount"]} for r in rows], "v"),
+            follow_up_questions=["Who is my top customer this month?", "Which city buys the most?"])
+    if _has(q, "customer", "client", "grahak", "buyer", "who buys", "who bought") and not (strict and filtered):
+        rows = who.get("top_customers") or []
+        if not rows:
+            return ChatAnswer(answer_markdown=f"No named customers on bills in {period} yet. Add the customer when billing.")
+        top = rows[0]
+        walk = (who.get("customers") or {}).get("walk_in_share_pct", 0)
+        return ChatAnswer(
+            answer_markdown=f"**Top customer, {period}:** **{top['name']}**: {top['pieces']} pieces, "
+                            f"**{inr(top['revenue'])}** ({top['share_pct']}% of sales). Walk-in customers: {walk}% of sales.",
+            table=ChatTable(columns=["Customer", "Pieces", "Revenue (₹)", "Bills"],
+                            rows=[[r["name"], r["pieces"], round(r["revenue"]), r["bills"]] for r in rows]),
+            chart=_bar("Revenue by customer", [{"name": r["name"], "v": r["revenue"]} for r in rows], "v"),
+            follow_up_questions=["Which city buys the most?", "Top customer in India this month?"])
+    region = next((k for k, words in (("country", ("country", "countries", "desh", "abroad")),
+                                      ("state", ("state", "states", "rajya")),
+                                      ("city", ("city", "cities", "shehar", "region", "where do", "location")))
+                   if _has(q, *words)), None)
+    if region and not (strict and filtered):
+        rows = who.get({"city": "top_cities", "state": "top_states", "country": "top_countries"}[region]) or []
+        if not rows:
+            return ChatAnswer(answer_markdown=f"No sales with a customer {region} in {period} yet.")
+        top = rows[0]
+        return ChatAnswer(
+            answer_markdown=f"**Sales by {region}, {period}:** **{top['name']}** leads with **{inr(top['revenue'])}** "
+                            f"({top['share_pct']}% of sales, {top['pieces']} pieces).",
+            table=ChatTable(columns=[region.title(), "Pieces", "Revenue (₹)", "Share %"],
+                            rows=[[r["name"], r["pieces"], round(r["revenue"]), r["share_pct"]] for r in rows]),
+            chart=_bar(f"Revenue by {region}", [{"name": r["name"], "v": r["revenue"]} for r in rows], "v"),
+            follow_up_questions=["Who is my top customer this month?", "Which dealer did I buy most from?"])
 
     # --- restock / budget -----------------------------------------------------------------
     if _has(q, "restock", "reorder", "re-order", "purchase", "buy", "budget", "kharid", "order more"):

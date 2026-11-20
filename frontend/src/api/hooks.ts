@@ -33,6 +33,7 @@ import type {
 const DATA_KEYS = [
   "dashboard", "categories", "category", "designs", "design", "designHistory", "designSearch", "movements",
   "stockToday", "periodStock", "alerts", "reports", "reorder", "insightsLatest", "chatSuggestions", "plans", "plan",
+  "customers", "dealers", "bills", "bill", "explore", "facets",
 ];
 
 export function invalidateData(qc: QueryClient, entity?: string) {
@@ -188,6 +189,7 @@ export const useImportDesigns = () =>
 // ---- stock -----------------------------------------------------------------------------------
 export interface MovementInput {
   design_id: number; type: MovementType; quantity: number; occurred_on?: string; unit_price?: number | null; note?: string | null;
+  customer_id?: number | null; dealer_id?: number | null; payment_mode?: string | null;
 }
 export const useRecordMovement = () =>
   useDataMutation((b: MovementInput) => api<MovementResult>("/stock/movements", { method: "POST", body: b }));

@@ -246,6 +246,8 @@ class MovementOut(BaseModel):
     source: str
     created_by: UserMini | None = None
     created_at: datetime | None = None
+    bill: dict | None = None        # {id, number, customer_name} for sales on a bill
+    dealer: dict | None = None      # {id, name} for purchases
     is_void: bool
     voided_at: datetime | None = None
     void_reason: str | None = None
@@ -266,6 +268,12 @@ class MovementCreate(In):
     occurred_on: date | None = None
     unit_price: float | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=300)
+    # sales: who bought it (optional; empty = walk-in). Every sale gets a bill.
+    customer_id: int | None = None
+    customer: dict | None = None
+    payment_mode: str | None = Field(default=None, max_length=20)
+    # purchases / opening stock: which dealer it came from (optional)
+    dealer_id: int | None = None
 
 
 class MovementBatch(In):
@@ -283,6 +291,8 @@ class DesignBrief(BaseModel):
 class MovementResult(BaseModel):
     movement: MovementOut
     design: DesignBrief
+    bill_id: int | None = None
+    bill_number: str | None = None
 
 
 class MovementBatchResult(BaseModel):

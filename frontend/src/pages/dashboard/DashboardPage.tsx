@@ -56,7 +56,7 @@ import { DemandBadge, ErrorState, KpiCard, LabelCode, LiveIndicator, Money, Phot
 import { celebrate } from "../../lib/confetti";
 import { MOVEMENT_META, STATUS_META } from "../../lib/constants";
 import { formatINR, formatNumber, formatRelative, greeting } from "../../lib/format";
-import { useAuth, useUi } from "../../stores";
+import { useAuth } from "../../stores";
 import { AddCategoryModal, AddDesignsWizard } from "../inventory/components";
 
 const SEV: Record<InstantInsight["severity"], { color: string }> = {
@@ -74,7 +74,6 @@ const INSIGHT_ICONS: Record<string, Icon> = {
 function SetupChecklist({ d, compact = false }: { d: Dashboard; compact?: boolean }) {
   const navigate = useNavigate();
   const { data: cats } = useCategories();
-  const openQuick = useUi((s) => s.openQuickStock);
   const [catOpen, setCatOpen] = useState(false);
   const [wizardFor, setWizardFor] = useState<number | null>(null);
   const firstCat = cats?.[0];
@@ -82,7 +81,7 @@ function SetupChecklist({ d, compact = false }: { d: Dashboard; compact?: boolea
     { done: d.setup.has_category, title: "Add your first category", help: "Like Earrings, Necklaces or Bangles.", cta: "Add category", icon: IconCategoryPlus, action: () => setCatOpen(true) },
     { done: d.setup.has_designs, title: "Add designs with their labels", help: "Enter how many designs you have and type their labels (e.g. ER-1012).", cta: "Add designs", icon: IconDiamond, action: () => (firstCat ? setWizardFor(firstCat.id) : setCatOpen(true)) },
     { done: d.setup.has_opening_stock, title: "Enter opening stock", help: "Done automatically when designs are created with stock.", cta: "Go to inventory", icon: IconPackage, action: () => navigate("/app/inventory") },
-    { done: d.setup.has_sale, title: "Record your first sale", help: "Tap − on any design to record a sale.", cta: "Record a sale", icon: IconShoppingBag, action: () => openQuick("OUT") },
+    { done: d.setup.has_sale, title: "Make your first bill", help: "Pick the customer and designs. A PDF bill is ready instantly.", cta: "New bill", icon: IconShoppingBag, action: () => navigate("/app/sales/new") },
     { done: d.setup.has_insights, title: "Generate your first AI insights", help: "Your AI accountant will analyse everything.", cta: "Generate insights", icon: IconSparkles, action: () => navigate("/app/insights") },
   ];
   const nextIdx = steps.findIndex((s) => !s.done);
@@ -204,7 +203,7 @@ function Onboarding({ d }: { d: Dashboard }) {
               title: "Load demo data?",
               children: (
                 <Text size="sm">
-                  This fills your empty shop with a sample jewellery store: 8 categories, about 120 designs and 12 months of sales,
+                  This fills your empty shop with a sample store: gold, silver and imitation designs, customers, dealers and 12 months of bills,
                   purchases and returns, so you can try every feature. You can reset it later in Settings.
                 </Text>
               ),

@@ -18,6 +18,10 @@ PUBLIC_KEYS = [
     "quarter_system",
     "monthly_purchase_budget",
     "max_stock_multiple",
+    "shop_address",
+    "shop_phone",
+    "shop_gstin",
+    "gst_pct",
 ]
 
 
@@ -33,6 +37,10 @@ def defaults() -> dict[str, Any]:
         "quarter_system": s.QUARTER_SYSTEM,
         "monthly_purchase_budget": 0.0,   # 0 = no limit
         "max_stock_multiple": 1.5,        # never restock above this × the most stock a design has held
+        "shop_address": "",
+        "shop_phone": "",
+        "shop_gstin": "",
+        "gst_pct": 3.0,                   # GST on jewellery in India (gold, silver and imitation) is 3%
         "data_version": 0,
         "milestones": {},
     }
@@ -78,6 +86,7 @@ _RULES = {
     "reorder_cover_months": (0.5, 6),
     "monthly_purchase_budget": (0, 1e12),
     "max_stock_multiple": (1, 5),
+    "gst_pct": (0, 28),
 }
 
 
@@ -95,5 +104,7 @@ def update(db: Session, user: User, patch: dict[str, Any]) -> dict[str, Any]:
             raise AppError("VALIDATION_ERROR", "quarter_system must be FINANCIAL or CALENDAR", 422)
         if key in ("shop_name", "owner_name"):
             value = str(value).strip()[:80] or defaults()[key]
+        if key in ("shop_address", "shop_phone", "shop_gstin"):
+            value = str(value).strip()[:200]
         set_value(db, key, value, user)
     return patch

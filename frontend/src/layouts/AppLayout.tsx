@@ -5,7 +5,6 @@ import {
   Badge,
   Box,
   Burger,
-  Button,
   Drawer,
   Group,
   Loader,
@@ -30,7 +29,7 @@ import {
   IconLayoutDashboard,
   IconLogout,
   IconMoon,
-  IconPlusMinus,
+  IconReceipt,
   IconSettings,
   IconShield,
   IconShoppingCart,
@@ -44,7 +43,6 @@ import { api } from "../api/client";
 import { useDashboard, useInsightsLatest, useRunningInsights, useSettings } from "../api/hooks";
 import { notifyInsightsReady, useLiveEvents } from "../api/sse";
 import { LabelSearchSpotlight, SearchTrigger } from "../components/LabelSearch";
-import { QuickStockDrawer } from "../components/stock";
 import { CardSkeleton, LiveIndicator } from "../components/ui";
 import { milestone } from "../lib/confetti";
 import { useAuth, useUi } from "../stores";
@@ -53,8 +51,9 @@ const NAV = [
   { to: "/app", label: "Dashboard", icon: IconLayoutDashboard, exact: true },
   { to: "/app/inventory", label: "Inventory", icon: IconDiamond },
   { to: "/app/stock", label: "Stock", icon: IconArrowsExchange },
+  { to: "/app/sales", label: "Sales & Bills", icon: IconReceipt },
+  { to: "/app/purchase-plans", label: "Purchases", icon: IconShoppingCart },
   { to: "/app/insights", label: "Insights", icon: IconSparkles },
-  { to: "/app/purchase-plans", label: "Purchase Plans", icon: IconShoppingCart },
   { to: "/app/reports", label: "Reports", icon: IconChartBar },
   { to: "/app/settings", label: "Settings", icon: IconSettings },
 ];
@@ -213,7 +212,6 @@ function ThemeToggle() {
 function MobileTabBar({ onMore }: { onMore: () => void }) {
   const navigate = useNavigate();
   const isActive = useActive();
-  const openQuick = useUi((s) => s.openQuickStock);
   const tabs = [
     { to: "/app", label: "Home", icon: IconLayoutDashboard, exact: true },
     { to: "/app/inventory", label: "Inventory", icon: IconDiamond },
@@ -237,11 +235,11 @@ function MobileTabBar({ onMore }: { onMore: () => void }) {
             radius="xl"
             variant="gradient"
             gradient={{ from: "gold.4", to: "gold.8", deg: 135 }}
-            aria-label="Quick stock"
-            onClick={() => openQuick("OUT")}
+            aria-label="New bill"
+            onClick={() => navigate("/app/sales/new")}
             style={{ marginTop: -26, boxShadow: "0 6px 18px rgba(157,122,24,.4)" }}
           >
-            <IconPlusMinus size={26} />
+            <IconReceipt size={26} />
           </ActionIcon>
         ) : (
           <UnstyledButton key={t.to} onClick={() => navigate(t.to)} style={{ textAlign: "center", minWidth: 60 }} aria-label={t.label}>
@@ -269,7 +267,6 @@ export function AppLayout() {
   const [drawer, { open: openDrawer, close: closeDrawer }] = useDisclosure(false);
   const collapsed = useUi((s) => s.navCollapsed);
   const toggleNav = useUi((s) => s.toggleNav);
-  const openQuick = useUi((s) => s.openQuickStock);
 
   const onReady = useCallback(() => {
     milestone("first_insights");
@@ -278,7 +275,6 @@ export function AppLayout() {
   useLiveEvents(onReady);
 
   const navWidth = collapsed ? 80 : 260;
-  const hideFab = ["/app/stock", "/app/insights", "/app/purchase-plans/"].some((p) => location.pathname.startsWith(p));
 
   return (
     <AppShell
@@ -330,24 +326,7 @@ export function AppLayout() {
         </Box>
       </AppShell.Main>
 
-      {isMobile ? (
-        <MobileTabBar onMore={openDrawer} />
-      ) : (
-        !hideFab && (
-          <Button
-            className="no-print"
-            onClick={() => openQuick("OUT")}
-            leftSection={<IconPlusMinus size={18} />}
-            radius="xl"
-            size="md"
-            variant="gradient"
-            gradient={{ from: "gold.5", to: "gold.8", deg: 135 }}
-            style={{ position: "fixed", right: 28, bottom: 28, zIndex: 120, boxShadow: "0 8px 24px rgba(157,122,24,.35)" }}
-          >
-            Quick stock
-          </Button>
-        )
-      )}
+      {isMobile && <MobileTabBar onMore={openDrawer} />}
 
       <Drawer opened={drawer} onClose={closeDrawer} size={280} title={<Logo />} padding="md">
         <Stack justify="space-between" h="calc(100% - 20px)">
@@ -358,7 +337,6 @@ export function AppLayout() {
           </Group>
         </Stack>
       </Drawer>
-      <QuickStockDrawer />
       <LabelSearchSpotlight />
     </AppShell>
   );

@@ -13,3 +13,4 @@ python-dateutil
 tzdata
 pytest
 httpx
+fpdf2>=2.7

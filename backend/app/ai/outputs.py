@@ -99,7 +99,8 @@ class KeyNumber(BaseModel):
     value: str
 
 
-ActionTarget = Literal["PURCHASE_PLAN", "OUT_OF_STOCK", "LOW_STOCK", "DEAD_STOCK", "ANOMALIES", "INVENTORY", "REPORTS"]
+ActionTarget = Literal["PURCHASE_PLAN", "OUT_OF_STOCK", "LOW_STOCK", "DEAD_STOCK", "ANOMALIES", "INVENTORY", "REPORTS",
+                       "SALES"]
 
 
 class Action(BaseModel):
@@ -119,6 +120,7 @@ class InsightsReport(BaseModel):
     whats_selling: str = ""
     whats_not_selling: str = ""
     money_view: str = ""
+    customers_view: str = Field(default="", description="1-2 sentences: who buys, from where, main dealers")
     risks: str = ""
     data_quality_notes: list[str] = Field(default_factory=list)
 

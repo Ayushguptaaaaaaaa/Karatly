@@ -126,6 +126,10 @@ class SettingsPatch(In):
     quarter_system: str | None = None
     monthly_purchase_budget: float | None = None
     max_stock_multiple: float | None = None
+    shop_address: str | None = Field(default=None, max_length=200)
+    shop_phone: str | None = Field(default=None, max_length=30)
+    shop_gstin: str | None = Field(default=None, max_length=20)
+    gst_pct: float | None = None
 
 
 @router.get("/settings", tags=["settings"])

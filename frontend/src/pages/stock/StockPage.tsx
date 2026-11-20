@@ -66,11 +66,14 @@ function MovementLine({ m }: { m: Movement }) {
 
 function QuickTab() {
   const { data: today } = useStockToday();
+  const [params] = useSearchParams();
+  const mode = params.get("mode") === "IN" ? "IN" : "OUT";
+  const designId = Number(params.get("design")) || null;
   return (
     <Grid gap="lg">
       <Grid.Col span={{ base: 12, md: 7 }}>
         <SectionCard title="Record stock" icon={<IconPlusMinus size={18} />}>
-          <QuickEntryPanel />
+          <QuickEntryPanel initialMode={mode} initialDesignId={designId} />
         </SectionCard>
       </Grid.Col>
       <Grid.Col span={{ base: 12, md: 5 }}>
@@ -278,12 +281,12 @@ export default function StockPage() {
   const tab = params.get("tab") ?? "quick";
   return (
     <>
-      <PageHeader title="Stock" subtitle="Record sales and new stock, see history, and check stock, revenue and profit for any day, month or quarter." />
+      <PageHeader title="Stock" subtitle="Add new stock, record sales, see history." />
       <Tabs value={tab} onChange={(v) => setParams({ tab: v ?? "quick" })} keepMounted={false}>
         <Tabs.List mb="lg">
-          <Tabs.Tab value="quick" leftSection={<IconPlusMinus size={16} />}>Quick entry</Tabs.Tab>
+          <Tabs.Tab value="quick" leftSection={<IconPlusMinus size={16} />}>Record</Tabs.Tab>
           <Tabs.Tab value="history" leftSection={<IconHistory size={16} />}>History</Tabs.Tab>
-          <Tabs.Tab value="period" leftSection={<IconListDetails size={16} />}>Day / Month / Quarter view</Tabs.Tab>
+          <Tabs.Tab value="period" leftSection={<IconListDetails size={16} />}>By period</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="quick"><QuickTab /></Tabs.Panel>
         <Tabs.Panel value="history"><HistoryTab /></Tabs.Panel>

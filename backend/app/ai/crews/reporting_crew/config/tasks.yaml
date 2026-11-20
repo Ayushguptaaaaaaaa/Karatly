@@ -7,11 +7,12 @@ write_insights_report:
     Demand: {demand_summary}
     Unusual entries: {anomaly_summary}
     Purchase plan: {plan_summary}
+    Customers, regions, materials and dealers: {who_summary}
     Data sufficiency: {data_sufficiency}
 
     Follow your report style guide. Map each recommended action to one target:
-    PURCHASE_PLAN, OUT_OF_STOCK, LOW_STOCK, DEAD_STOCK, ANOMALIES, INVENTORY or REPORTS.
+    PURCHASE_PLAN, OUT_OF_STOCK, LOW_STOCK, DEAD_STOCK, ANOMALIES, INVENTORY, REPORTS or SALES.
   expected_output: >
     JSON matching InsightsReport: headline, conclusion, confidence, confidence_reason, key_numbers,
-    recommended_actions, whats_selling, whats_not_selling, money_view, risks, data_quality_notes.
+    recommended_actions, whats_selling, whats_not_selling, money_view, customers_view, risks, data_quality_notes.
   agent: report_writer

@@ -22,8 +22,8 @@ def load_skills(crew_dir: Path, names: list[str]) -> str:
             parts.append(p.read_text(encoding="utf-8").strip())
         else:
             log.warning("Skill file missing: %s", p)
-    shared = SHARED_SKILLS / "output_rules.md"
-    if shared.exists():
+    # shared skills go to every agent: jewellery trade knowledge first, output rules last
+    for shared in sorted(SHARED_SKILLS.glob("*.md"), key=lambda p: (p.name == "output_rules.md", p.name)):
         parts.append(shared.read_text(encoding="utf-8").strip())
     text = "\n\n".join(parts)
     # CrewAI interpolates {placeholders}; skills must never contain braces.

@@ -38,6 +38,7 @@ FRIENDLY = {
     "get_anomaly_candidates": "Looking for unusual entries…",
     "get_sales_trend": "Reading the sales trend…",
     "get_profitability": "Working out revenue and profit…",
+    "get_sales_breakdown": "Looking at customers, regions and dealers…",
 }
 
 
@@ -346,7 +347,67 @@ class GetProfitability(JsonTool):
                 "rows": [{k: r.get(k) for k in keep if k in r} for r in res["rows"]]}
 
 
+class BreakdownArgs(BaseModel):
+    group_by: str = Field(default="customer", description=(
+        "Sales: customer, city, state, country, design, category, subcategory, metal, month, payment_mode. "
+        "Purchases: dealer, dealer_city, dealer_state, design, category, metal, month."))
+    kind: str = Field(default="sales", description="sales or purchases")
+    period_type: str = Field(default="month", description="day, month, quarter, or 'all' for all time")
+    anchor: str | None = Field(default=None, description="Any date inside the period, YYYY-MM-DD. Default today.")
+    country: str | None = Field(default=None, description="Filter sales by customer country, e.g. India")
+    state: str | None = Field(default=None, description="Filter sales by customer state, e.g. Maharashtra")
+    city: str | None = Field(default=None, description="Filter sales by customer city, e.g. Mumbai")
+    customer: str | None = Field(default=None, description="Filter sales by customer name (partial ok)")
+    dealer: str | None = Field(default=None, description="Filter purchases by dealer name (partial ok)")
+    metal: str | None = Field(default=None, description="GOLD, SILVER, PLATINUM, IMITATION or OTHER")
+    limit: int = Field(default=10, ge=1, le=25)
+
+
+class GetSalesBreakdown(JsonTool):
+    name: str = "get_sales_breakdown"
+    description: str = ("Exact pieces and revenue (sales) or pieces and cost (purchases), grouped by customer, "
+                        "city, state, country, dealer, design, category, material or month, with any mix of filters. "
+                        "Use for: top customer in a country/month, sales by region, what a dealer supplied.")
+    args_schema: type[BaseModel] = BreakdownArgs
+
+    def fetch(self, db, group_by="customer", kind="sales", period_type="month", anchor=None, country=None,
+              state=None, city=None, customer=None, dealer=None, metal=None, limit=10):
+        from app.models import Customer, Dealer
+        from app.services import explorer_service
+
+        kind = "purchases" if str(kind).lower().startswith("purch") else "sales"
+        f: dict = {}
+        label = "all time"
+        if period_type != "all":
+            p = _period(db, period_type, anchor)
+            f.update(date_from=p.start, date_to=p.end)
+            label = p.label
+        for k, v in (("country", country), ("state", state), ("city", city)):
+            if v:
+                f[k] = v.strip().title()
+        if metal:
+            f["metal"] = metal.strip().upper()
+        if customer:
+            c = db.query(Customer).filter(Customer.name_key.like(f"%{customer.strip().lower()}%")).first()
+            if not c:
+                return {"error": f"No customer named {customer}"}
+            f["customer_id"] = c.id
+        if dealer:
+            d = db.query(Dealer).filter(Dealer.name_key.like(f"%{dealer.strip().lower()}%")).first()
+            if not d:
+                return {"error": f"No dealer named {dealer}"}
+            f["dealer_id"] = d.id
+        groups = explorer_service.SALES_GROUPS if kind == "sales" else explorer_service.PURCHASE_GROUPS
+        gb = group_by if group_by in groups else ("customer" if kind == "sales" else "dealer")
+        res = explorer_service.explore(db, kind, f, gb, "value", "desc", 1, limit)
+        vname = "revenue" if kind == "sales" else "cost"
+        return {"kind": kind, "period": label, "filters": {k: str(v) for k, v in f.items() if "date" not in k},
+                "group_by": gb, "totals": {"pieces": res["totals"]["qty"], vname: res["totals"]["value"]},
+                "rows": [{"name": i["label"], "pieces": i["qty"], vname: i["value"], "share_pct": i["share_pct"]}
+                         for i in res["items"]]}
+
+
 def all_tools() -> list[BaseTool]:
     return [GetShopOverview(), SearchDesigns(), GetLabelDetails(), GetPeriodStock(), GetSalesSummary(),
             ComparePeriods(), GetStockAlerts(), GetDemandClassification(), GetReorderBaseline(),
-            CalculatePurchaseCost(), GetAnomalyCandidates(), GetSalesTrend(), GetProfitability()]
+            CalculatePurchaseCost(), GetAnomalyCandidates(), GetSalesTrend(), GetProfitability(), GetSalesBreakdown()]

@@ -13,6 +13,7 @@ import {
   Menu,
   Paper,
   Progress,
+  SegmentedControl,
   SimpleGrid,
   Skeleton,
   Stack,
@@ -42,6 +43,7 @@ import {
   IconShoppingCart,
   IconSparkles,
   IconTrendingUp,
+  IconUsers,
   IconZzz,
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,10 +53,10 @@ import { useNavigate, useSearchParams } from "react-router";
 import { errorMessage } from "../../api/client";
 import { useDashboard, useInsightRun, useInsightRuns, useInsightsLatest, usePeriodParams, useRunningInsights, useStartInsights } from "../../api/hooks";
 import { useJobEvents } from "../../api/sse";
-import type { InsightRun, JobStep } from "../../api/types";
+import type { InsightRun, JobStep, WhoRow, WhoSummary } from "../../api/types";
 import { PeriodPicker } from "../../components/PeriodPicker";
 import { EmptyBox, ErrorState, LabelCode, PageHeader, SectionCard } from "../../components/ui";
-import { CATEGORY_COLORS } from "../../lib/constants";
+import { CATEGORY_COLORS, METAL_LABEL } from "../../lib/constants";
 import { celebrate } from "../../lib/confetti";
 import { formatINR, formatRelative } from "../../lib/format";
 import { useUi } from "../../stores";
@@ -191,6 +193,81 @@ function GenerationProgress({ jobId, onDone }: { jobId: string; onDone: (runId: 
 }
 
 // ---- report ------------------------------------------------------------------------------------
+const MATERIAL_COLOR: Record<string, string> = { GOLD: "yellow.6", SILVER: "gray.5", PLATINUM: "blue.4", IMITATION: "pink.5", OTHER: "teal.5" };
+
+function BarList({ rows, color = "gold" }: { rows: WhoRow[]; color?: string }) {
+  if (!rows.length) return <Text size="sm" c="dimmed">No data yet</Text>;
+  const max = Math.max(...rows.map((r) => r.revenue), 1);
+  return (
+    <Stack gap={8}>
+      {rows.map((r) => (
+        <Box key={r.name}>
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <Text size="sm" fw={500} truncate>{r.name}</Text>
+            <Text size="sm" fw={700} className="num">{formatINR(r.revenue, { compact: true })}</Text>
+          </Group>
+          <Progress value={(r.revenue / max) * 100} size="sm" color={color} mt={3} />
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function WhoSection({ who, note }: { who: WhoSummary; note?: string }) {
+  const navigate = useNavigate();
+  const [place, setPlace] = useState<"top_cities" | "top_states" | "top_countries">("top_cities");
+  const mix = who.material_mix.filter((m) => m.revenue > 0);
+  return (
+    <SectionCard
+      title="Who buys, from where"
+      icon={<IconUsers size={18} />}
+      actions={<Button size="xs" variant="light" onClick={() => navigate("/app/sales?tab=explore")}>Explore sales →</Button>}
+    >
+      {note && <Text size="sm" mb="md">{note}</Text>}
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xl" verticalSpacing="lg">
+        <Box>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb="xs">Top customers</Text>
+          <BarList rows={who.top_customers} />
+          <Text size="xs" c="dimmed" mt="xs">Walk-in: {who.customers.walk_in_share_pct}% of sales</Text>
+        </Box>
+        <Box>
+          <SegmentedControl size="xs" mb="xs" value={place} onChange={(v) => setPlace(v as typeof place)}
+            data={[{ value: "top_cities", label: "City" }, { value: "top_states", label: "State" }, { value: "top_countries", label: "Country" }]} />
+          <BarList rows={who[place]} color="teal" />
+        </Box>
+        <Box>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb="xs">Gold vs silver vs imitation</Text>
+          {mix.length ? (
+            <Group gap="md" wrap="nowrap">
+              <DonutChart size={110} thickness={16} withTooltip valueFormatter={(v) => formatINR(v, { compact: true })}
+                data={mix.map((m) => ({ name: METAL_LABEL[m.name] ?? m.name, value: m.revenue, color: MATERIAL_COLOR[m.name] ?? "gray.5" }))} />
+              <Stack gap={2}>
+                {mix.map((m) => <Text key={m.name} size="xs"><b>{METAL_LABEL[m.name] ?? m.name}</b> {m.share_pct}%</Text>)}
+              </Stack>
+            </Group>
+          ) : <Text size="sm" c="dimmed">No data yet</Text>}
+        </Box>
+        <Box>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb="xs">Bought from (dealers)</Text>
+          {who.top_dealers.length ? (
+            <Table fz="sm" verticalSpacing={4}>
+              <Table.Tbody>
+                {who.top_dealers.map((d) => (
+                  <Table.Tr key={d.name}>
+                    <Table.Td><Text size="sm" truncate maw={200}>{d.name}</Text></Table.Td>
+                    <Table.Td ta="right"><Text size="xs" c="dimmed" className="num">{d.pieces} pcs</Text></Table.Td>
+                    <Table.Td ta="right"><Text size="sm" fw={700} className="num">{formatINR(d.amount, { compact: true })}</Text></Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          ) : <Text size="sm" c="dimmed">No purchases in this period</Text>}
+        </Box>
+      </SimpleGrid>
+    </SectionCard>
+  );
+}
+
 function ReportView({ run }: { run: InsightRun }) {
   const navigate = useNavigate();
   const r = run.report;
@@ -203,6 +280,7 @@ function ReportView({ run }: { run: InsightRun }) {
       case "DEAD_STOCK": return { label: "See slow stock", go: () => navigate("/app/reports?tab=dead") };
       case "ANOMALIES": return { label: "Show entries", go: () => document.getElementById("anomalies")?.scrollIntoView({ behavior: "smooth" }) };
       case "REPORTS": return { label: "Open reports", go: () => navigate("/app/reports") };
+      case "SALES": return { label: "Explore sales", go: () => navigate("/app/sales?tab=explore") };
       default: return { label: "Open inventory", go: () => navigate("/app/inventory") };
     }
   };
@@ -270,7 +348,7 @@ function ReportView({ run }: { run: InsightRun }) {
                         <Text fw={700}>{i + 1}. {a.title}</Text>
                         <Badge size="xs" color={PRIO_COLOR[a.priority]} variant="light">{a.priority.toLowerCase()}</Badge>
                       </Group>
-                      <Text size="sm" c="dimmed">{a.why}</Text>
+                      <Text size="sm" c="dimmed" lineClamp={1}>{a.why}</Text>
                     </Box>
                     <Button size="xs" variant="light" onClick={t.go}>{t.label} →</Button>
                   </Group>
@@ -279,6 +357,8 @@ function ReportView({ run }: { run: InsightRun }) {
             })}
           </Stack>
         </SectionCard>)}
+
+      {run.facts?.who && sec(2, <WhoSection who={run.facts.who} note={r.customers_view} />)}
 
       {sec(2,
         <SimpleGrid cols={{ base: 1, md: 2 }}>
@@ -290,11 +370,12 @@ function ReportView({ run }: { run: InsightRun }) {
                 return (
                   <Box key={d.label}>
                     <Group justify="space-between" wrap="nowrap">
-                      <Text size="sm"><LabelCode>{d.label}</LabelCode> <Text span size="xs" c="dimmed">{d.category}</Text></Text>
+                      <Tooltip label={d.reason} multiline w={300} disabled={!d.reason}>
+                        <Text size="sm" style={{ cursor: "help" }}><LabelCode>{d.label}</LabelCode> <Text span size="xs" c="dimmed">{d.category}</Text></Text>
+                      </Tooltip>
                       <Text size="xs" fw={600} className="num">{d.velocity_30d}/mo</Text>
                     </Group>
-                    <Progress value={(d.velocity_30d / max) * 100} size="xs" color="orange" mt={2} />
-                    <Text size="xs" c="dimmed" mt={2} lineClamp={2}>{d.reason}</Text>
+                    <Progress value={(d.velocity_30d / max) * 100} size="sm" color="orange" mt={2} />
                   </Box>
                 );
               })}
@@ -307,10 +388,9 @@ function ReportView({ run }: { run: InsightRun }) {
             <Text size="sm" mb="sm">{r.whats_not_selling}</Text>
             <Stack gap={6}>
               {run.demand.low_demand.slice(0, 8).map((d) => (
-                <Box key={d.label}>
-                  <Text size="sm"><LabelCode>{d.label}</LabelCode> <Text span size="xs" c="dimmed">{d.category}</Text></Text>
-                  <Text size="xs" c="dimmed" lineClamp={2}>{d.reason}</Text>
-                </Box>
+                <Tooltip key={d.label} label={d.reason} multiline w={300} disabled={!d.reason}>
+                  <Text size="sm" style={{ cursor: "help" }}><LabelCode>{d.label}</LabelCode> <Text span size="xs" c="dimmed">{d.category}</Text></Text>
+                </Tooltip>
               ))}
             </Stack>
             <WhyCollapse>
@@ -348,7 +428,7 @@ function ReportView({ run }: { run: InsightRun }) {
                             <Table.Td w={110}><LabelCode>{n.label}</LabelCode></Table.Td>
                             <Table.Td w={110}><Text size="xs" c="dimmed">{n.category}</Text></Table.Td>
                             <Table.Td w={70} className="num">{n.stock} pcs</Table.Td>
-                            <Table.Td><Text size="xs">{n.note}</Text></Table.Td>
+                            <Table.Td><Tooltip label={n.note} multiline w={300} disabled={!n.note}><Text size="xs" c="dimmed" lineClamp={1}>{n.note}</Text></Tooltip></Table.Td>
                           </Table.Tr>
                         ))}
                       </Table.Tbody>

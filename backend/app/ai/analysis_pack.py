@@ -108,6 +108,9 @@ def build_pack(db: Session, p: period_service.Period) -> dict:
         demand_counts[snap.states[d.id].demand.value] += 1
 
     settings = settings_service.get_all(db)
+    from app.services import explorer_service
+
+    who = explorer_service.summary(db, p.start, p.end)
     return {
         "shop": {"name": settings["shop_name"], "currency": "INR", "today": str(t),
                  "quarter_system": settings["quarter_system"]},
@@ -129,6 +132,7 @@ def build_pack(db: Session, p: period_service.Period) -> dict:
         "reorder_total": float(base["total_estimated"]),
         "anomaly_candidates": anomaly_service.candidates(db, snap=snap),
         "upcoming_season": upcoming_season(t),
+        "customers_regions_dealers": who,
         "settings": {k: settings[k] for k in ("inflation_pct_global", "dead_stock_days", "reorder_cover_months",
                                                "default_min_stock")},
         "_facts": {
@@ -139,5 +143,6 @@ def build_pack(db: Session, p: period_service.Period) -> dict:
             "demand_counts": demand_counts,
             "stock_health": overview["stock_health"],
             "inr_total_reorder": costing_service.format_inr_compact(base["total_estimated"]),
+            "who": who,
         },
     }

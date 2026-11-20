@@ -3,7 +3,14 @@ from crewai.project import CrewBase, agent, crew, task
 
 from app.ai.crews.base import CrewHelpers
 from app.ai.outputs import ChatAnswer
-from app.ai.tools import ComparePeriods, GetLabelDetails, GetProfitability, GetSalesSummary, SearchDesigns
+from app.ai.tools import (
+    ComparePeriods,
+    GetLabelDetails,
+    GetProfitability,
+    GetSalesBreakdown,
+    GetSalesSummary,
+    SearchDesigns,
+)
 from app.core.config import get_settings
 
 
@@ -20,7 +27,8 @@ class AssistantCrew(CrewHelpers):
     def accountant_assistant(self) -> Agent:
         return self.make_agent(
             "accountant_assistant", ["answering_guidelines.md"],
-            [GetLabelDetails(), GetProfitability(), GetSalesSummary(), ComparePeriods(), SearchDesigns()],
+            [GetLabelDetails(), GetProfitability(), GetSalesSummary(), ComparePeriods(), SearchDesigns(),
+             GetSalesBreakdown()],
             max_iter=3, max_retry_limit=0,
         )
 

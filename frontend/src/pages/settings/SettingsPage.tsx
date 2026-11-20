@@ -35,7 +35,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Shop profile, business rules, AI status and data tools." actions={<Button onClick={save} disabled={!dirty} loading={update.isPending}>Save changes</Button>} />
+      <PageHeader title="Settings" subtitle="Shop details, bills, rules and data." actions={<Button onClick={save} disabled={!dirty} loading={update.isPending}>Save changes</Button>} />
       {form && (
         <Grid gap="lg">
           <Grid.Col span={{ base: 12, md: 6 }}>
@@ -44,6 +44,12 @@ export default function SettingsPage() {
                 <Stack>
                   <TextInput label="Shop name" value={form.shop_name} onChange={(e) => set("shop_name", e.currentTarget.value)} maxLength={80} />
                   <TextInput label="Owner name" value={form.owner_name} onChange={(e) => set("owner_name", e.currentTarget.value)} maxLength={80} />
+                  <TextInput label="Address (on bills)" value={form.shop_address ?? ""} onChange={(e) => set("shop_address", e.currentTarget.value)} maxLength={200} />
+                  <Group grow>
+                    <TextInput label="Phone (on bills)" value={form.shop_phone ?? ""} onChange={(e) => set("shop_phone", e.currentTarget.value)} maxLength={30} />
+                    <TextInput label="GSTIN" value={form.shop_gstin ?? ""} onChange={(e) => set("shop_gstin", e.currentTarget.value.toUpperCase())} maxLength={20} />
+                    <NumberInput label="GST on bills" suffix="%" min={0} max={28} decimalScale={2} value={form.gst_pct ?? 3} onChange={(v) => set("gst_pct", Number(v) || 0)} />
+                  </Group>
                 </Stack>
               </SectionCard>
               <SectionCard title="Business rules" icon={<IconSettings size={18} />}>
@@ -98,7 +104,7 @@ export default function SettingsPage() {
                     <Group justify="space-between" wrap="wrap">
                       <Box maw={360}>
                         <Text fw={600}>Load demo data</Text>
-                        <Text size="xs" c="dimmed">8 categories, about 120 designs and 12 months of history, to try every feature.</Text>
+                        <Text size="xs" c="dimmed">Gold, silver and imitation designs, customers, dealers, bills and 12 months of sales.</Text>
                       </Box>
                       <Tooltip label="Only for an empty shop" disabled={!hasDesigns}>
                         <Button variant="light" disabled={hasDesigns} loading={loadDemo.isPending}

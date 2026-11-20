@@ -332,7 +332,7 @@ export default function ReportsPage() {
     <>
       <PageHeader
         title="Reports"
-        subtitle="Sales, profit, stock and slow-moving designs for any day, month or quarter. Export any of them to Excel."
+        subtitle="Sales, profit and stock for any period. Export to Excel."
         actions={<>{tab !== "compare" && tab !== "dead" && <PeriodPicker compact />}<Button variant="default" leftSection={<IconPrinter size={16} />} onClick={() => window.print()}>Print</Button></>}
       />
       <Tabs value={tab} onChange={(v) => setParams({ tab: v ?? "sales" })} keepMounted={false}>

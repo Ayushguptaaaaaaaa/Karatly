@@ -14,7 +14,7 @@ def test_demo_data_insights_and_chat(api):
     r = api.post("/insights/runs", {})
     assert r.status_code == 422 and r.json()["error"]["code"] == "NO_DATA"
     demo = api.post("/admin/demo-data", {}).json()
-    assert demo["designs"] == 120
+    assert demo["designs"] == 136  # 120 gold / silver + 16 imitation (AD, Kundan, oxidised)
     assert api.post("/admin/demo-data", {}).status_code == 409
     ov = api.get("/dashboard/overview").json()
     assert ov["kpis"]["out_of_stock"] >= 6 and ov["kpis"]["low_stock"] >= 8 and ov["kpis"]["dead_stock"] >= 10

@@ -38,6 +38,13 @@ class StockMovement(Base):
     voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     voided_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     void_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # sales belong to a bill; purchases / opening stock record the dealer they came from
+    bill_id: Mapped[int | None] = mapped_column(ForeignKey("bills.id", ondelete="SET NULL"), nullable=True, index=True)
+    dealer_id: Mapped[int | None] = mapped_column(ForeignKey("dealers.id", ondelete="SET NULL"), nullable=True,
+                                                  index=True)
+    list_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)  # before bill discount
 
     design: Mapped[Design] = relationship()
+    bill: Mapped["Bill | None"] = relationship(back_populates="items")  # noqa: F821
+    dealer: Mapped["Dealer | None"] = relationship()  # noqa: F821
     creator: Mapped[User | None] = relationship(foreign_keys=[created_by])

@@ -81,6 +81,9 @@ def movement_out(m: StockMovement) -> dict:
         "is_void": m.is_void,
         "voided_at": m.voided_at,
         "void_reason": m.void_reason,
+        "bill": ({"id": m.bill.id, "number": m.bill.number, "customer_name": m.bill.customer_name}
+                 if m.bill_id and m.bill else None),
+        "dealer": {"id": m.dealer.id, "name": m.dealer.name} if m.dealer_id and m.dealer else None,
     }
 
 
