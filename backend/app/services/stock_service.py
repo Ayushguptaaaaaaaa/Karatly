@@ -207,7 +207,8 @@ def void(db: Session, user: User, movement_id: int, reason: str | None) -> dict:
 
 
 def list_movements(db: Session, *, design_id=None, label=None, category_id=None, types=None, date_from=None,
-                   date_to=None, include_void=True, created_by=None, page=1, page_size=25) -> dict:
+                   date_to=None, include_void=True, created_by=None, page=1, page_size=25, customer_id=None,
+                   dealer_id=None, sort_by: str | None = None, sort_dir: str | None = None) -> dict:
     q = db.query(StockMovement).options(joinedload(StockMovement.design), joinedload(StockMovement.creator),
                                         joinedload(StockMovement.bill), joinedload(StockMovement.dealer))
     if design_id:
@@ -226,12 +227,42 @@ def list_movements(db: Session, *, design_id=None, label=None, category_id=None,
         q = q.filter(StockMovement.is_void.is_(False))
     if created_by:
         q = q.filter(StockMovement.created_by == created_by)
+    if dealer_id:
+        q = q.filter(StockMovement.dealer_id == dealer_id)
+    if customer_id:
+        from app.models import Bill
+
+        q = q.filter(StockMovement.bill_id.in_(db.query(Bill.id).filter(Bill.customer_id == customer_id)))
     total = q.count()
     page_size = max(1, min(int(page_size), 200))
     page = max(1, int(page))
-    rows = (q.order_by(StockMovement.occurred_on.desc(), StockMovement.id.desc())
-            .offset((page - 1) * page_size).limit(page_size).all())
+    rows = (q.order_by(*_history_order(q, sort_by, sort_dir)).offset((page - 1) * page_size).limit(page_size).all())
     return {"items": [movement_out(m) for m in rows], "total": total, "page": page, "page_size": page_size}
+
+
+def _history_order(q, sort_by: str | None, sort_dir: str | None):
+    """Order for the History table: date, type, design, quantity, value (₹), party (customer / dealer), user."""
+    from sqlalchemy import func as f_
+
+    from app.models import Bill, Dealer
+
+    desc = (sort_dir or "desc").lower() != "asc"
+    col = {
+        "occurred_on": StockMovement.occurred_on,
+        "type": StockMovement.type,
+        "quantity": StockMovement.quantity,
+        "value": f_.coalesce(StockMovement.unit_price, 0) * StockMovement.quantity,
+        "created_by": StockMovement.created_by,
+    }.get(sort_by or "occurred_on")
+    if sort_by == "party":
+        col = f_.coalesce(
+            q.session.query(Bill.customer_name).filter(Bill.id == StockMovement.bill_id).scalar_subquery(),
+            q.session.query(Dealer.name).filter(Dealer.id == StockMovement.dealer_id).scalar_subquery(), "")
+    if sort_by == "design":
+        col = q.session.query(Design.label).filter(Design.id == StockMovement.design_id).scalar_subquery()
+    if col is None:
+        col = StockMovement.occurred_on
+    return [col.desc() if desc else col.asc(), StockMovement.id.desc() if desc else StockMovement.id.asc()]
 
 
 def today_entries(db: Session, user: User) -> dict:

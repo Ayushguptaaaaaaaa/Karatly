@@ -44,8 +44,12 @@ const DRILL: Record<string, string> = {
   metal: "category", month: "design", payment_mode: "customer", dealer: "design", dealer_city: "dealer",
 };
 
-export function Explorer({ kind, initialGroup = "", initialRange = "This month" }: {
+export function Explorer({ kind, initialGroup = "", initialRange = "This month", fixedRange, lockGroup = false }: {
   kind: ExploreKind; initialGroup?: string; initialRange?: string | null;
+  /** embedded use: dates come from the page (e.g. Stock → By period) and the date picker is hidden */
+  fixedRange?: [string, string];
+  /** embedded use: keep one grouping (e.g. dealers) and hide the "Group by" chips */
+  lockGroup?: boolean;
 }) {
   const sales = kind === "sales";
   const { data: facets } = useFacets();
@@ -60,9 +64,9 @@ export function Explorer({ kind, initialGroup = "", initialRange = "This month" 
   const pageSize = 50;
 
   const params = useMemo(() => cleanQuery({
-    ...f, label: debounced || undefined, date_from: range[0] ?? undefined, date_to: range[1] ?? undefined,
+    ...f, label: debounced || undefined, date_from: (fixedRange ?? range)[0] ?? undefined, date_to: (fixedRange ?? range)[1] ?? undefined,
     group_by: group || undefined, sort_by: String(sort.columnAccessor), sort_dir: sort.direction, page, page_size: pageSize,
-  }), [f, debounced, range, group, sort, page]);
+  }), [f, debounced, range, fixedRange?.[0], fixedRange?.[1], group, sort, page]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setPage(1), [f, debounced, range, group]);
   const { data, isFetching, isError, refetch } = useExplore(kind, params);
 
@@ -178,10 +182,10 @@ export function Explorer({ kind, initialGroup = "", initialRange = "This month" 
     <Stack gap="sm">
       <Paper className="soft-card" p="sm" radius="md">
         <Group gap="xs" wrap="wrap">
-          <DatePickerInput
+          {!fixedRange && <DatePickerInput
             size="xs" type="range" w={230} placeholder="All time" clearable valueFormat="D MMM YYYY" presets={PRESETS}
             value={range} onChange={(v) => setRange([v[0] ? fmt(dayjs(v[0])) : null, v[1] ? fmt(dayjs(v[1])) : null])}
-          />
+          />}
           {sales ? (
             <>
               {sel("country", "Country", facets?.countries, 140)}
@@ -211,14 +215,14 @@ export function Explorer({ kind, initialGroup = "", initialRange = "This month" 
             </Button>
           </Tooltip>
         </Group>
-        <ScrollArea type="never" mt="xs">
+        {!lockGroup && <ScrollArea type="never" mt="xs">
           <Group gap={6} wrap="nowrap">
             <Text size="xs" c="dimmed" fw={600}>Group by</Text>
             <Chip.Group value={group} onChange={(v) => changeGroup(v as string)}>
               {groups.map((g) => <Chip key={g.value} value={g.value} size="xs" variant="light">{g.label}</Chip>)}
             </Chip.Group>
           </Group>
-        </ScrollArea>
+        </ScrollArea>}
       </Paper>
 
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
@@ -264,12 +268,12 @@ export function Explorer({ kind, initialGroup = "", initialRange = "This month" 
           striped
           highlightOnHover
           defaultColumnProps={{ noWrap: true }}
-          onRowClick={group ? ({ record }) => drill(record as GroupRow) : undefined}
-          rowStyle={() => (group ? { cursor: "pointer" } : undefined)}
+          onRowClick={group && !lockGroup ? ({ record }) => drill(record as GroupRow) : undefined}
+          rowStyle={() => (group && !lockGroup ? { cursor: "pointer" } : undefined)}
           noRecordsText={sales ? "No sales match these filters" : "No purchases match these filters"}
         />
       </Box>
-      {group && <Text size="xs" c="dimmed">Tip: click a row to see what's inside it.</Text>}
+      {group && !lockGroup && <Text size="xs" c="dimmed">Tip: click a row to see what's inside it.</Text>}
     </Stack>
   );
 }

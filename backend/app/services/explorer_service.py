@@ -287,12 +287,12 @@ def summary(db: Session, date_from: date, date_to: date, n: int = 5) -> dict:
     def top_of(group: str) -> list[dict]:
         items = sorted(_group(rows, group, "revenue"), key=lambda x: -x["value"])
         return [{"name": i["label"], "pieces": i["qty"], "revenue": i["value"], "share_pct": i["share_pct"],
-                 "bills": i["bills"]} for i in items[:n]]
+                 "bills": i["bills"]} for i in items if i["label"] not in (WALK_IN, UNKNOWN)][:n]
 
     named = [r for r in rows if r.get("customer_id")]
     walk_in_rev = sum((r["revenue"] for r in rows if not r.get("customer_id")), Decimal(0))
     total = sum((r["revenue"] for r in rows), Decimal(0))
-    purchases = purchase_rows(db, {**f, "purchases_only": True})
+    purchases = purchase_rows(db, f)  # deliveries incl. opening stock, so an imported shop shows its dealers
     dealers = sorted(_group(purchases, "dealer", "amount"), key=lambda x: -x["value"])
     return {
         "top_customers": [c for c in top_of("customer") if c["name"] != WALK_IN][:n],
@@ -306,4 +306,52 @@ def summary(db: Session, date_from: date, date_to: date, n: int = 5) -> dict:
                       "walk_in_share_pct": round(float(walk_in_rev / total * 100), 1) if total else 0.0},
         "top_dealers": [{"name": d["label"], "pieces": d["qty"], "amount": d["value"], "designs": d["designs"],
                          "share_pct": d["share_pct"]} for d in dealers[:n]],
+    }
+
+
+def design_parties(db: Session, date_from: date | None = None, date_to: date | None = None) -> dict[int, dict]:
+    """Per design: its dealer (latest delivery, any time) and who bought it in the period."""
+    out: dict[int, dict] = {}
+    q = (db.query(StockMovement.design_id, Dealer.name, Dealer.id)
+         .join(Dealer, Dealer.id == StockMovement.dealer_id)
+         .filter(StockMovement.is_void.is_(False),
+                 StockMovement.type.in_([MovementType.PURCHASE, MovementType.OPENING]))
+         .order_by(StockMovement.occurred_on, StockMovement.id))
+    dealers_per: dict[int, set] = {}
+    for did, name, dealer_id in q.all():
+        out.setdefault(did, {})["dealer"] = name
+        out[did]["dealer_id"] = dealer_id
+        dealers_per.setdefault(did, set()).add(dealer_id)
+    for did, s in dealers_per.items():
+        out[did]["dealers"] = len(s)
+    q = (db.query(StockMovement.design_id, Bill.customer_id, Bill.customer_name, StockMovement.quantity,
+                  StockMovement.unit_price)
+         .join(Bill, Bill.id == StockMovement.bill_id)
+         .filter(StockMovement.is_void.is_(False), StockMovement.type == MovementType.SALE,
+                 Bill.customer_id.isnot(None)))
+    if date_from:
+        q = q.filter(StockMovement.occurred_on >= date_from)
+    if date_to:
+        q = q.filter(StockMovement.occurred_on <= date_to)
+    per: dict[int, dict] = {}
+    for did, cid, cname, qty, price in q.all():
+        c = per.setdefault(did, {}).setdefault(cid, {"name": cname, "pieces": 0, "revenue": Decimal(0)})
+        c["pieces"] += qty
+        c["revenue"] += Decimal(price or 0) * qty
+    for did, custs in per.items():
+        top = max(custs.values(), key=lambda c: c["revenue"])
+        out.setdefault(did, {}).update(customers=len(custs), top_customer=top["name"])
+    return out
+
+
+def parties_for_design(db: Session, design_id: int) -> dict:
+    """Design page: every dealer it came from and every customer who bought it (all time)."""
+    f = {"design_id": design_id}
+    sales = explore(db, "sales", f, "customer", "value", "desc", 1, 50)
+    buys = explore(db, "purchases", f, "dealer", "value", "desc", 1, 50)
+    return {
+        "customers": [{"id": int(i["key"]) or None, "name": i["label"], "pieces": i["qty"], "revenue": i["value"],
+                       "bills": i["bills"]} for i in sales["items"]],
+        "dealers": [{"id": int(i["key"]) or None, "name": i["label"], "pieces": i["qty"], "amount": i["value"],
+                     "deliveries": i["entries"]} for i in buys["items"]],
     }

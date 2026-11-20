@@ -182,7 +182,7 @@ export const useImportDesigns = () =>
   useDataMutation(({ file, dryRun }: { file: File; dryRun: boolean }) => {
     const form = new FormData();
     form.append("file", file);
-    return api<{ valid_rows: number; errors: { row: number; field: string; message: string }[]; will_create: { categories: number; subcategories: number; designs: number }; imported: boolean }>(
+    return api<{ valid_rows: number; errors: { row: number; field: string; message: string }[]; will_create: { categories: number; subcategories: number; designs: number; dealers?: number; pieces?: number }; imported: boolean }>(
       "/designs/import", { method: "POST", form, query: { dry_run: dryRun } });
   });
 

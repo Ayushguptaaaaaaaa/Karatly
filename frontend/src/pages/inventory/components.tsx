@@ -726,7 +726,8 @@ export function ImportExcelModal({ opened, onClose }: { opened: boolean; onClose
               </Text>
               <Text size="sm" c="dimmed">
                 Will create {result.will_create.categories} categories, {result.will_create.subcategories} subcategories,{" "}
-                {result.will_create.designs} designs
+                {result.will_create.designs} designs{result.will_create.dealers ? `, ${result.will_create.dealers} dealers` : ""}
+                {result.will_create.pieces ? ` (${result.will_create.pieces} pieces in stock)` : ""}
               </Text>
             </Group>
             {result.errors.length > 0 && (

@@ -212,12 +212,13 @@ def validate_rows(db: Session, rows: list[dict], default_min: int) -> tuple[list
             min_stock = default_min
         metal = (r.get("metal") or "GOLD").upper()
         if metal not in Metal.__members__:
-            errors.append({"index": idx, "field": "metal", "message": "GOLD, SILVER, PLATINUM or OTHER"})
+            errors.append({"index": idx, "field": "metal", "message": "GOLD, SILVER, PLATINUM, IMITATION or OTHER"})
             metal = "GOLD"
         clean.append({
             "label": lbl, "name": (r.get("name") or None), "metal": Metal(metal),
             "purity": (r.get("purity") or None), "weight_g": weight, "cost_price": cost, "selling_price": sell,
-            "min_stock": min_stock, "opening_stock": opening, "supplier": r.get("supplier") or None,
+            "min_stock": min_stock, "opening_stock": opening,
+            "supplier": (str(r.get("supplier") or r.get("dealer") or "").strip() or None),
             "description": r.get("description") or None,
         })
     return clean, errors
@@ -253,8 +254,12 @@ def bulk_create(db: Session, user: User, category_id: int, subcategory_id: int |
         db.add(d)
         db.flush()
         if opening > 0:
-            stock_service._add_movement(db, user, d, MovementType.OPENING, opening, on, d.cost_price,
-                                        source=source, check=False)
+            m = stock_service._add_movement(db, user, d, MovementType.OPENING, opening, on, d.cost_price,
+                                            source=source, check=False)
+            if d.supplier:  # the supplier is a dealer: link the opening stock to it
+                from app.services import contacts_service
+
+                m.dealer_id = contacts_service.get_or_create_dealer(db, user, d.supplier).id
         created.append(d)
     audit_service.log(db, user, "CREATE", "design_batch", c.id,
                       after={"count": len(created), "labels": [d.label for d in created][:50]})

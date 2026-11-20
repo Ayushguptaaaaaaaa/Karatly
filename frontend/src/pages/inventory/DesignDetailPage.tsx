@@ -10,6 +10,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { errorMessage } from "../../api/client";
 import { useArchiveDesign, useDeleteDesign, useDeletePhoto, useDesign, useDesignHistory, useUploadPhoto, useVoidMovement } from "../../api/hooks";
 import type { Movement } from "../../api/types";
+import { useDesignParties } from "../../api/sales";
 import { StockStepper } from "../../components/stock";
 import { CategoryIcon, DemandBadge, EmptyBox, LabelCode, Money, SectionCard, StatusBadge } from "../../components/ui";
 import { MOVEMENT_META, STATUS_META } from "../../lib/constants";
@@ -94,6 +95,34 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
         {value}
       </Text>
     </Paper>
+  );
+}
+
+function PartiesCard({ designId }: { designId: number }) {
+  const { data } = useDesignParties(designId);
+  const list = (rows: { name: string; pieces: number; value: number; sub: string }[], empty: string) => (rows.length ? (
+    <Stack gap={6}>
+      {rows.slice(0, 6).map((r) => (
+        <Group key={r.name} justify="space-between" wrap="nowrap" gap="xs">
+          <Box style={{ minWidth: 0 }}>
+            <Text size="sm" fw={600} truncate>{r.name}</Text>
+            <Text size="xs" c="dimmed">{r.pieces} pcs · {r.sub}</Text>
+          </Box>
+          <Text size="sm" fw={700} className="num">{formatINR(r.value, { compact: true })}</Text>
+        </Group>
+      ))}
+      {rows.length > 6 && <Text size="xs" c="dimmed">+{rows.length - 6} more</Text>}
+    </Stack>
+  ) : <Text size="sm" c="dimmed">{empty}</Text>);
+  return (
+    <SimpleGrid cols={{ base: 1, sm: 2 }}>
+      <SectionCard title="Bought from (dealers)">
+        {data ? list(data.dealers.map((d) => ({ name: d.name, pieces: d.pieces, value: d.amount, sub: `${d.deliveries} deliver${d.deliveries > 1 ? "ies" : "y"}` })), "No dealer recorded yet") : <Skeleton h={60} />}
+      </SectionCard>
+      <SectionCard title="Sold to (customers)">
+        {data ? list(data.customers.map((c) => ({ name: c.name, pieces: c.pieces, value: c.revenue, sub: `${c.bills} bill${c.bills > 1 ? "s" : ""}` })), "Not sold yet") : <Skeleton h={60} />}
+      </SectionCard>
+    </SimpleGrid>
   );
 }
 
@@ -263,6 +292,7 @@ export default function DesignDetailPage() {
               <Fact label="Net revenue (30d)" value={<Money value={d.net_revenue_30d} compact />} />
               <Fact label="Net profit (30d)" value={<Text span fw={700} c={d.net_profit_30d < 0 ? "red.7" : "teal.8"}><Money value={d.net_profit_30d} compact />{d.margin_pct_30d !== null ? ` · ${d.margin_pct_30d}%` : ""}</Text>} />
             </SimpleGrid>
+            <PartiesCard designId={d.id} />
             <SectionCard
               title="Last 12 months"
               actions={<SegmentedControl size="xs" value={histMode} onChange={(v) => setHistMode(v as "pieces" | "money")}

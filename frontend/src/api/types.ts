@@ -74,9 +74,12 @@ export interface PeriodRow {
   opening: number; opening_added: number; received: number; sold: number; customer_returns: number;
   supplier_returns: number; adjustments_net: number; closing: number; sales_value: number; status_now: StockStatus;
   net_revenue: number; net_profit: number; margin_pct: number | null;
+  dealer: string | null; dealers: number; customers: number; top_customer: string | null;
 }
 export interface PeriodStock {
   period: PeriodInfo; rows: Page<PeriodRow>;
+  top_customer: { name: string; pieces: number; revenue: number; share_pct: number } | null;
+  top_dealer: { name: string; pieces: number; amount: number; share_pct: number } | null;
   totals: Record<"opening" | "opening_added" | "received" | "sold" | "customer_returns" | "supplier_returns" | "adjustments_net" | "closing" | "sales_value" | "net_revenue" | "net_profit", number> & { margin_pct: number | null };
 }
 

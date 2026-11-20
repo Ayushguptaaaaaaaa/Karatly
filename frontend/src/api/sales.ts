@@ -144,6 +144,15 @@ export function useVoidBill() {
   });
 }
 
+// ---- who supplied / bought a design -----------------------------------------------------------
+export interface DesignParties {
+  dealers: { id: number | null; name: string; pieces: number; amount: number; deliveries: number }[];
+  customers: { id: number | null; name: string; pieces: number; revenue: number; bills: number }[];
+}
+export function useDesignParties(id: number | undefined) {
+  return useQuery({ queryKey: ["design", id, "parties"], queryFn: () => api<DesignParties>(`/designs/${id}/parties`), enabled: !!id });
+}
+
 // ---- explorer -----------------------------------------------------------------------------
 export function useExplore(kind: ExploreKind, params: Record<string, string | number | boolean | undefined>) {
   return useQuery({

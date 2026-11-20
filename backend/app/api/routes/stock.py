@@ -42,6 +42,10 @@ def list_movements(
     date_to: date | None = None,
     include_void: bool = True,
     created_by: int | None = None,
+    customer_id: int | None = None,
+    dealer_id: int | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
     page: int = 1,
     page_size: int = 25,
     db: Session = Depends(get_db),
@@ -51,6 +55,7 @@ def list_movements(
     return stock_service.list_movements(
         db, design_id=design_id, label=label, category_id=category_id, types=types, date_from=date_from,
         date_to=date_to, include_void=include_void, created_by=created_by, page=page, page_size=page_size,
+        customer_id=customer_id, dealer_id=dealer_id, sort_by=sort_by, sort_dir=sort_dir,
     )
 
 

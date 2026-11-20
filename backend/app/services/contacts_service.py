@@ -159,6 +159,20 @@ def _dealer_stats(db: Session, ids: list[int] | None = None) -> dict[int, dict]:
     return out
 
 
+def get_or_create_dealer(db: Session, user: User | None, name: str, city: str | None = None,
+                         state: str | None = None) -> Dealer:
+    """Find a dealer by name (case-insensitive) or create it. Used by imports and the design form."""
+    key = " ".join(name.strip().lower().split())
+    d = db.query(Dealer).filter(Dealer.name_key == key, Dealer.is_active.is_(True)).first()
+    if d:
+        if city and not d.city:
+            d.city = _title(city)
+        if state and not d.state:
+            d.state = _title(state)
+        return d
+    return create_dealer(db, user, {"name": " ".join(name.split()), "city": city, "state": state}, commit=False)
+
+
 def list_dealers(db: Session, q: str | None = None) -> list[dict]:
     query = db.query(Dealer).filter(Dealer.is_active.is_(True))
     if q:

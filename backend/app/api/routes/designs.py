@@ -64,6 +64,15 @@ def search(q: str = "", limit: int = 8, db: Session = Depends(get_db), _: User =
     return design_service.search(db, q, limit)
 
 
+@router.get("/{design_id}/parties")
+def design_parties(design_id: int, db: Session = Depends(get_db), _: User = CurrentUser):
+    """Who supplied this design and who bought it (all time)."""
+    from app.services import explorer_service
+
+    design_service.get(db, design_id)
+    return explorer_service.parties_for_design(db, design_id)
+
+
 @router.get("/import-template")
 def import_template(_: User = CurrentUser):
     data = import_export_service.template_xlsx()

@@ -15,7 +15,7 @@ from app.models.enums import MovementSource
 from app.services import audit_service, category_service, data_version_service, design_service, settings_service
 
 COLUMNS = ["category", "subcategory", "label", "name", "metal", "purity", "weight_g", "cost_price", "selling_price",
-           "min_stock", "opening_stock", "supplier"]
+           "min_stock", "opening_stock", "dealer", "dealer_city", "dealer_state"]
 INR_FORMAT = '[$₹-4009]#,##,##0.00'
 
 
@@ -27,16 +27,17 @@ def template_xlsx() -> bytes:
     for c in ws[1]:
         c.font = Font(bold=True)
         c.fill = PatternFill("solid", fgColor="F4E9C9")
-    ws.append(["Earrings", "Jhumkas", "ER-1001", "Kundan jhumka", "GOLD", "22K", 8.5, 42000, 52000, 3, 6, "Shree Ornaments"])
+    ws.append(["Earrings", "Jhumkas", "ER-1001", "Kundan jhumka", "GOLD", "22K", 8.5, 42000, 52000, 3, 6, "Shree Ornaments",
+               "Ahmedabad", "Gujarat"])
     for c in ws[2]:
         c.font = Font(italic=True, color="888888")
-    dv_metal = DataValidation(type="list", formula1='"GOLD,SILVER,PLATINUM,OTHER"', allow_blank=True)
+    dv_metal = DataValidation(type="list", formula1='"GOLD,SILVER,PLATINUM,IMITATION,OTHER"', allow_blank=True)
     dv_purity = DataValidation(type="list", formula1='"24K,22K,18K,14K,925,950,Other"', allow_blank=True)
     ws.add_data_validation(dv_metal)
     ws.add_data_validation(dv_purity)
     dv_metal.add("E2:E2000")
     dv_purity.add("F2:F2000")
-    for i, w in enumerate([14, 14, 12, 26, 10, 8, 10, 12, 13, 10, 13, 20], start=1):
+    for i, w in enumerate([14, 14, 12, 26, 10, 8, 10, 12, 13, 10, 13, 20, 14, 14], start=1):
         ws.column_dimensions[chr(64 + i)].width = w
     ws.freeze_panes = "A2"
     help_ws = wb.create_sheet("Help")
@@ -46,14 +47,16 @@ def template_xlsx() -> bytes:
         ("subcategory", "Optional subcategory name (created if missing)"),
         ("label", "Unique design label, e.g. ER-1012"),
         ("name", "Optional design name"),
-        ("metal", "GOLD, SILVER, PLATINUM or OTHER"),
+        ("metal", "GOLD, SILVER, PLATINUM, IMITATION (AD, Kundan, plated) or OTHER"),
         ("purity", "e.g. 22K, 18K, 925"),
         ("weight_g", "Optional weight in grams"),
         ("cost_price", "Cost per piece in ₹ (required)"),
         ("selling_price", "Selling price per piece in ₹ (required)"),
         ("min_stock", "Alert when stock is at or below this (optional)"),
         ("opening_stock", "Pieces in stock now (optional, default 0)"),
-        ("supplier", "Optional supplier / karigar"),
+        ("dealer", "Optional dealer / supplier / karigar the stock came from (created if new)"),
+        ("dealer_city", "Optional dealer city"),
+        ("dealer_state", "Optional dealer state"),
         ("Note", "Delete the grey example row before importing."),
     ]
     for r in rows:
@@ -107,7 +110,10 @@ def import_designs(db: Session, user: User, content: bytes, dry_run: bool) -> di
         sub = str(r.get("subcategory") or "").strip()
         if sub:
             new_subs.add((ck, sub.lower()))
-    summary = {"categories": len(new_cats), "subcategories": len(new_subs), "designs": len(rows)}
+    dealers = {" ".join(str(r.get("dealer") or r.get("supplier") or "").lower().split()) for _, r in rows} - {""}
+    summary = {"categories": len(new_cats), "subcategories": len(new_subs), "designs": len(rows),
+               "dealers": len(dealers), "pieces": sum(int(r.get("opening_stock") or 0) for _, r in rows
+                                                      if str(r.get("opening_stock") or "0").isdigit())}
     if dry_run or errors:
         return {"valid_rows": len(rows) - len({e["row"] for e in errors}), "errors": errors, "will_create": summary,
                 "imported": False}
@@ -120,6 +126,14 @@ def import_designs(db: Session, user: User, content: bytes, dry_run: bool) -> di
         c["metal"] = c["metal"].value
         groups.setdefault((cat_name, sub_name), []).append(c)
     try:
+        from app.services import contacts_service
+
+        for _, raw in rows:
+            name = str(raw.get("dealer") or raw.get("supplier") or "").strip()
+            if name:
+                contacts_service.get_or_create_dealer(db, user, name, str(raw.get("dealer_city") or "").strip() or None,
+                                                      str(raw.get("dealer_state") or "").strip() or None)
+        db.flush()
         for (cat_name, sub_name), items in groups.items():
             key = " ".join(cat_name.lower().split())
             cat = existing_cats.get(key)
@@ -139,7 +153,9 @@ def import_designs(db: Session, user: User, content: bytes, dry_run: bool) -> di
                     db.add(sub)
                     db.flush()
                 sub_id = sub.id
-            design_service.bulk_create(db, user, cat.id, sub_id, items, source=MovementSource.IMPORT, commit=False)
+            for i in range(0, len(items), 100):
+                design_service.bulk_create(db, user, cat.id, sub_id, items[i:i + 100], source=MovementSource.IMPORT,
+                                           commit=False)
         audit_service.log(db, user, "IMPORT", "designs", None, after=summary)
         ev = data_version_service.bump(db, "design", "import")
         db.commit()
